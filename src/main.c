@@ -1,33 +1,31 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include "../macho-analyzer/include/macho_analyzer.h"
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Использование: %s <путь к Mach-O файлу>\n", argv[0]);
-        return EXIT_FAILURE;
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <mach-o file>\n", argv[0]);
+        return 1;
     }
 
     const char *filename = argv[1];
     FILE *file = fopen(filename, "rb");
     if (!file) {
-        perror("Ошибка при открытии файла");
-        return EXIT_FAILURE;
+        perror("Failed to open file");
+        return 1;
     }
 
     MachOFile mach_o_file;
     if (analyze_mach_o(file, &mach_o_file) != 0) {
-        fprintf(stderr, "Ошибка при анализе файла.\n");
+        fprintf(stderr, "Failed to analyze Mach-O file.\n");
         fclose(file);
-        return EXIT_FAILURE;
+        return 1;
     }
 
-    // Выводим информацию на экран
-    print_mach_o_info(&mach_o_file);
+    if (mach_o_file.commands) {
+        print_mach_o_info(&mach_o_file, file);
+        free_mach_o_file(&mach_o_file);
+    }
 
-    // Освобождаем ресурсы
-    free_mach_o_file(&mach_o_file);
     fclose(file);
-
-    return EXIT_SUCCESS;
+    return 0;
 }
