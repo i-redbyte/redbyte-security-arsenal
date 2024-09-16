@@ -1,9 +1,12 @@
-project(macho-analyzer C)
+project(macho_analyzer C)
 
 set(CMAKE_C_STANDARD 11)
 
-# Создаем статическую библиотеку macho-analyzer
-add_library(macho-analyzer STATIC src/macho_analyzer.c)
+set(SOURCES
+        src/macho_analyzer.c
+        src/language_detector.c
+        )
 
-# Указываем директорию с заголовочными файлами
+add_library(macho-analyzer STATIC ${SOURCES})
+
 target_include_directories(macho-analyzer PUBLIC include)
