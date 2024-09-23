@@ -95,7 +95,7 @@ static int analyze_fat_binary(FILE *file) {
     }
 
     uint32_t nfat_arch = OSSwapBigToHostInt32(fatHeader.nfat_arch);
-    struct fat_arch *fatArchs = malloc(sizeof(struct fat_arch) * nfat_arch);
+    struct fat_arch *fatArchs = calloc(nfat_arch, sizeof(struct fat_arch));
     if (!fatArchs) {
         fprintf(stderr, "Memory allocation failed for fat_arch.\n");
         return -1;
@@ -110,7 +110,10 @@ static int analyze_fat_binary(FILE *file) {
 
     for (uint32_t i = 0; i < nfat_arch; i++) {
         uint32_t offset = OSSwapBigToHostInt32(fatArchs[i].offset);
-        fseek(file, offset, SEEK_SET);
+        if (fseek(file, offset, SEEK_SET) != 0) {
+            fprintf(stderr, "Failed to seek to architecture %u.\n", i + 1);
+            continue;
+        }
 
         MachOFile arch_mach_o_file;
         if (analyze_mach_header(file, &arch_mach_o_file) != 0) {
@@ -124,8 +127,6 @@ static int analyze_fat_binary(FILE *file) {
             continue;
         }
 
-        // Вывод информации о Mach-O файле для данной архитектуры
-        print_mach_o_info(&arch_mach_o_file, file);
         free_mach_o_file(&arch_mach_o_file);
     }
 
@@ -138,7 +139,7 @@ static int analyze_mach_header(FILE *file, MachOFile *mach_o_file) {
     if (read_and_validate(file, &magic, sizeof(uint32_t), "Failed to read magic number") != 0) {
         return -1;
     }
-    fseek(file, -sizeof(uint32_t), SEEK_CUR); // Возвращаемся назад
+    fseek(file, -(long) sizeof(uint32_t), SEEK_CUR); // Возвращаемся назад
 
     if (magic == MH_MAGIC_64 || magic == MH_CIGAM_64) {
         mach_o_file->is_64_bit = 1;
@@ -410,9 +411,9 @@ void print_mach_o_info(const MachOFile *mach_o_file, FILE *file) {
                 printf("  LC_UUID\n");
                 struct uuid_command *uuid_cmd = (struct uuid_command *) cmd;
                 printf("  UUID: ");
-                for (int i = 0; i < 16; i++) {
-                    printf("%02x", uuid_cmd->uuid[i]);
-                    if (i == 3 || i == 5 || i == 7 || i == 9)
+                for (int k = 0; k < 16; k++) {
+                    printf("%02x", uuid_cmd->uuid[k]);
+                    if (k == 3 || k == 5 || k == 7 || k == 9)
                         printf("-");
                 }
                 printf("\n");
