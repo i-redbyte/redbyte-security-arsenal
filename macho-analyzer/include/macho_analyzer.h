@@ -15,12 +15,28 @@ typedef struct {
     uint32_t command_count;
 } MachOFile;
 
-// Анализирует Mach-O файл и заполняет структуру MachOFile
+/**
+ * Анализирует Mach-O файл и сохраняет результат в структуру MachOFile.
+ *
+ * @param file Указатель на файл для анализа.
+ * @param mach_o_file Структура для хранения данных о Mach-O.
+ * @return 0 при успехе, -1 в случае ошибки.
+ */
 int analyze_mach_o(FILE *file, MachOFile *mach_o_file);
 
-// Освобождает выделенную память в структуре MachOFile
+/**
+ * Освобождает ресурсы, выделенные для хранения данных MachOFile.
+ *
+ * @param mach_o_file Структура с данными о Mach-O, для которой необходимо освободить память.
+ */
 void free_mach_o_file(MachOFile *mach_o_file);
 
+/**
+ * Выводит информацию о Mach-O файле.
+ *
+ * @param mach_o_file Структура, содержащая данные о Mach-O.
+ * @param file Указатель на исходный файл Mach-O.
+ */
 void print_mach_o_info(const MachOFile *mach_o_file, FILE *file);
 
 #endif // MACHO_ANALYZER_H
