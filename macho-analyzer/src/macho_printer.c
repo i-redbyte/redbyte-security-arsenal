@@ -14,41 +14,137 @@
  */
 static uint64_t decode_uleb128(const uint8_t **p, const uint8_t *end);
 
+/**
+ * Функция для вывода информации заголовка Mach-O файла.
+ *
+ * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о файле.
+ */
 static void print_header_info(const MachOFile *mach_o_file);
 
+/**
+ * Функция для вывода команды сегмента.
+ *
+ * @param cmd Указатель на команду сегмента.
+ * @param is_64_bit Флаг, указывающий, является ли файл 64-битным.
+ */
 static void print_segment_command(const struct load_command *cmd, bool is_64_bit);
 
+/**
+ * Функция для вывода команды символов.
+ *
+ * @param cmd Указатель на команду символов.
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на файл для вывода информации.
+ */
 static void print_symtab_command(const struct load_command *cmd, const MachOFile *mach_o_file, FILE *file);
 
+/**
+ * Функция для вывода команды динамической таблицы символов.
+ *
+ * @param cmd Указатель на команду динамической таблицы символов.
+ * @param file Указатель на файл для вывода информации.
+ */
 static void print_dysymtab_command(const struct load_command *cmd, FILE *file);
 
+/**
+ * Функция для вывода команды динамической библиотеки.
+ *
+ * @param cmd Указатель на команду динамической библиотеки.
+ */
 static void print_dylib_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды загрузчика динамических библиотек.
+ *
+ * @param cmd Указатель на команду загрузчика.
+ */
 static void print_dylinker_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды UUID.
+ *
+ * @param cmd Указатель на команду UUID.
+ */
 static void print_uuid_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды минимальной версии.
+ *
+ * @param cmd Указатель на команду минимальной версии.
+ */
 static void print_version_min_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды версии источника.
+ *
+ * @param cmd Указатель на команду версии источника.
+ */
 static void print_source_version_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды точки входа.
+ *
+ * @param cmd Указатель на команду точки входа.
+ */
 static void print_entry_point_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды начала функций.
+ *
+ * @param cmd Указатель на команду начала функций.
+ * @param file Указатель на файл для вывода информации.
+ */
 static void print_function_starts_command(const struct load_command *cmd, FILE *file);
 
+/**
+ * Функция для вывода команды данных в коде.
+ *
+ * @param cmd Указатель на команду данных в коде.
+ */
 static void print_data_in_code_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды сигнатуры кода.
+ *
+ * @param cmd Указатель на команду сигнатуры кода.
+ */
 static void print_code_signature_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды информации о шифровании.
+ *
+ * @param cmd Указатель на команду информации о шифровании.
+ */
 static void print_encryption_info_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды пути загрузки.
+ *
+ * @param cmd Указатель на команду пути загрузки.
+ */
 static void print_rpath_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды версии сборки.
+ *
+ * @param cmd Указатель на команду версии сборки.
+ */
 static void print_build_version_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды опций линковщика.
+ *
+ * @param cmd Указатель на команду опций линковщика.
+ */
 static void print_linker_option_command(const struct load_command *cmd);
 
+/**
+ * Функция для вывода команды заметок.
+ *
+ * @param cmd Указатель на команду заметок.
+ */
 static void print_note_command(const struct load_command *cmd);
+
 
 void print_mach_o_info(const MachOFile *mach_o_file, FILE *file) {
     if (!mach_o_file) {
