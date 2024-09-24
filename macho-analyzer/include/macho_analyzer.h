@@ -31,12 +31,4 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file);
  */
 void free_mach_o_file(MachOFile *mach_o_file);
 
-/**
- * Выводит информацию о Mach-O файле.
- *
- * @param mach_o_file Структура, содержащая данные о Mach-O.
- * @param file Указатель на исходный файл Mach-O.
- */
-void print_mach_o_info(const MachOFile *mach_o_file, FILE *file);
-
 #endif // MACHO_ANALYZER_H

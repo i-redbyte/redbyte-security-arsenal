@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "../macho-analyzer/include/macho_analyzer.h"
+#include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
 
 int main(int argc, char *argv[]) {
