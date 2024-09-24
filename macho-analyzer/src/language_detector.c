@@ -2,13 +2,57 @@
 #include <string.h>
 #include <stdlib.h>
 #include <mach-o/nlist.h>
-#include <mach-o/stab.h>
 #include <stdio.h>
 
+typedef struct {
+    const char *prefix;
+    const char *language;
+    const char *compiler;
+} SymbolMapping;
+
+static const SymbolMapping symbol_mappings[] = {
+        {"__Z", "C++", "Clang"},
+        {"_OBJC_", "Objective-C", "Clang"},
+        {"_$s", "Swift", "Apple Swift Compiler"},
+        {"_$LT", "Rust", "rustc"},
+        {"_main.", "Go", "gc (Go compiler)"},
+        {"_Java", "Java", "GraalVM Native Image"},
+        {"_JNI", "Java", "GraalVM Native Image"},
+        {"_kfun:", "Kotlin/Native", "Kotlin Native Compiler"},
+        {"PyInit_", "Python", "Cython or CPython"},
+        {"rb_", "Ruby", "Ruby Interpreter"},
+        {"_ghczm", "Haskell", "GHC"},
+        {"_erl_", "Erlang/Elixir", "Erlang VM"},
+        {"_elixir_", "Elixir", "Erlang VM"},
+        {"_start", "Assembly", "Assembler"},
+        {"_JS_", "JavaScript", "V8 or SpiderMonkey"},
+        {"_PHP_", "PHP", "Zend Engine"},
+        {"_perl_", "Perl", "Perl Interpreter"},
+        {"_node_", "Node.js", "V8"},
+        {"_v8_", "V8", "V8 Engine"},
+        {"_julia_", "Julia", "Julia Compiler"},
+        {"_matlab_", "MATLAB", "MATLAB Compiler"},
+        {"_fortran_", "Fortran", "GNU Fortran or Intel Fortran"},
+        {"_cobol_", "COBOL", "COBOL Compiler"},
+        {"_pascal_", "Pascal", "Free Pascal"},
+        {"_ada_", "Ada", "GNAT"},
+        {"_lisp_", "Lisp", "SBCL or CLISP"},
+        {"_clojure_", "Clojure", "Clojure Compiler"},
+        {"_scheme_", "Scheme", "MIT/GNU Scheme"},
+        {"_lua_", "Lua", "LuaJIT"},
+        {"_tcl_", "Tcl", "Tcl Interpreter"},
+        {"_r_", "R", "R Interpreter"},
+        {"_ocaml_", "OCaml", "OCaml Compiler"},
+        {"_scala_", "Scala", "Scala Compiler"},
+        {"_elm_", "Elm", "Elm Compiler"},
+        {"_dart_", "Dart", "Dart Compiler"},
+        {"_crystal_", "Crystal", "Crystal Compiler"},
+        {"_nim_", "Nim", "Nim Compiler"},
+        {"_zig_", "Zig", "Zig Compiler"}
+};
+
 static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
-
 static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
-
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
 
 int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
@@ -45,6 +89,7 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
     struct load_command *cmd = mach_o_file->commands;
     uint32_t ncmds = mach_o_file->command_count;
 
+    // Поиск команды LC_SYMTAB
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_SYMTAB) {
             symtab_cmd = (struct symtab_command *) cmd;
@@ -90,140 +135,72 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
         return -1;
     }
 
-    uint32_t cpp_symbols = 0;
-    uint32_t objc_symbols = 0;
-    uint32_t swift_symbols = 0;
-    uint32_t rust_symbols = 0;
-    uint32_t go_symbols = 0;
-    uint32_t java_symbols = 0;
-    uint32_t kotlin_symbols = 0;
-    uint32_t python_symbols = 0;
-    uint32_t ruby_symbols = 0;
-    uint32_t haskell_symbols = 0;
-    uint32_t erlang_symbols = 0;
-    uint32_t assembly_symbols = 0;
-
     for (uint32_t i = 0; i < symtab_cmd->nsyms; i++) {
         char *sym_name;
-        uint8_t n_type;
         if (mach_o_file->is_64_bit) {
             struct nlist_64 *sym = &((struct nlist_64 *) symbols)[i];
             uint32_t strx = sym->n_un.n_strx;
             if (strx >= symtab_cmd->strsize) continue;
             sym_name = string_table + strx;
-            n_type = sym->n_type;
         } else {
             struct nlist *sym = &((struct nlist *) symbols)[i];
             uint32_t strx = sym->n_un.n_strx;
             if (strx >= symtab_cmd->strsize) continue;
             sym_name = string_table + strx;
-            n_type = sym->n_type;
         }
 
-        if (strstr(sym_name, "__Z") == sym_name || strstr(sym_name, "_Z") == sym_name) {
-            cpp_symbols++;
-        } else if (strstr(sym_name, "_OBJC_") || strstr(sym_name, "_objc_")) {
-            objc_symbols++;
-        } else if (strstr(sym_name, "_$s") == sym_name || strstr(sym_name, "_$S") == sym_name) {
-            swift_symbols++;
-        } else if (strstr(sym_name, "_$LT") || strstr(sym_name, "_ZN")) {
-            rust_symbols++;
-        } else if (strstr(sym_name, "_main.") == sym_name || strstr(sym_name, "_runtime.") == sym_name) {
-            go_symbols++;
-        } else if (strstr(sym_name, "_Java") == sym_name || strstr(sym_name, "_JNI") == sym_name) {
-            java_symbols++;
-        } else if (strstr(sym_name, "_kfun:") == sym_name) {
-            kotlin_symbols++;
-        } else if (strstr(sym_name, "PyInit_") == sym_name || strstr(sym_name, "_Py") == sym_name) {
-            python_symbols++;
-        } else if (strstr(sym_name, "rb_") == sym_name || strstr(sym_name, "_rb_") == sym_name) {
-            ruby_symbols++;
-        } else if (strstr(sym_name, "_ghczm") == sym_name || strstr(sym_name, "_stg") == sym_name) {
-            haskell_symbols++;
-        } else if (strstr(sym_name, "_erl_") == sym_name || strstr(sym_name, "_elixir_") == sym_name) {
-            erlang_symbols++;
-        } else if (strcmp(sym_name, "_start") == 0 || strcmp(sym_name, "start") == 0) {
-            assembly_symbols++;
+        // Проверка символа на принадлежность языку
+        for (size_t j = 0; j < sizeof(symbol_mappings) / sizeof(SymbolMapping); j++) {
+            if (strstr(sym_name, symbol_mappings[j].prefix) == sym_name) {
+                strcpy(lang_info->language, symbol_mappings[j].language);
+                strcpy(lang_info->compiler, symbol_mappings[j].compiler);
+                free(symbols);
+                free(string_table);
+                fseek(file, current_offset, SEEK_SET);
+                return 0;
+            }
         }
-    }
 
-    uint32_t max_symbols = 0;
-    const char *detected_language = NULL;
-    const char *detected_compiler = NULL;
+        // Специальная проверка на компиляторы C: Clang, GCC и т.д.
+        if (strcmp(sym_name, "_main") == 0 || strcmp(sym_name, "__start") == 0) {
+            // Если обнаружен символ main, то это C, но нужно определить компилятор
+            if (strstr(sym_name, "__gccmain")) {
+                strcpy(lang_info->language, "C");
+                strcpy(lang_info->compiler, "GCC");
+            } else {
+                strcpy(lang_info->language, "C");
+                strcpy(lang_info->compiler, "Clang");
+            }
+            free(symbols);
+            free(string_table);
+            fseek(file, current_offset, SEEK_SET);
+            return 0;
+        }
 
-    if (swift_symbols > max_symbols) {
-        max_symbols = swift_symbols;
-        detected_language = "Swift";
-        detected_compiler = "Apple Swift Compiler";
-    }
-    if (objc_symbols > max_symbols) {
-        max_symbols = objc_symbols;
-        detected_language = "Objective-C";
-        detected_compiler = "Clang";
-    }
-    if (cpp_symbols > max_symbols) {
-        max_symbols = cpp_symbols;
-        detected_language = "C++";
-        detected_compiler = "Clang";
-    }
-    if (rust_symbols > max_symbols) {
-        max_symbols = rust_symbols;
-        detected_language = "Rust";
-        detected_compiler = "rustc";
-    }
-    if (go_symbols > max_symbols) {
-        max_symbols = go_symbols;
-        detected_language = "Go";
-        detected_compiler = "gc (Go compiler)";
-    }
-    if (kotlin_symbols > max_symbols) {
-        max_symbols = kotlin_symbols;
-        detected_language = "Kotlin/Native";
-        detected_compiler = "Kotlin Native Compiler";
-    }
-    if (java_symbols > max_symbols) {
-        max_symbols = java_symbols;
-        detected_language = "Java";
-        detected_compiler = "GraalVM Native Image";
-    }
-    if (python_symbols > max_symbols) {
-        max_symbols = python_symbols;
-        detected_language = "Python";
-        detected_compiler = "Cython or CPython";
-    }
-    if (ruby_symbols > max_symbols) {
-        max_symbols = ruby_symbols;
-        detected_language = "Ruby";
-        detected_compiler = "Ruby Interpreter";
-    }
-    if (haskell_symbols > max_symbols) {
-        max_symbols = haskell_symbols;
-        detected_language = "Haskell";
-        detected_compiler = "GHC";
-    }
-    if (erlang_symbols > max_symbols) {
-        max_symbols = erlang_symbols;
-        detected_language = "Erlang/Elixir";
-        detected_compiler = "Erlang VM";
-    }
-    if (assembly_symbols > 0 && max_symbols == 0) {
-        detected_language = "Assembly";
-        detected_compiler = "Assembler";
-    }
-
-    if (detected_language) {
-        strcpy(lang_info->language, detected_language);
-        strcpy(lang_info->compiler, detected_compiler);
-    } else {
-        strcpy(lang_info->language, "C");
-        strcpy(lang_info->compiler, "Clang");
+        // NASM и FASM (зависит от символов и структуры файла)
+        if (strstr(sym_name, "_start") == sym_name || strstr(sym_name, "nasm") == sym_name) {
+            strcpy(lang_info->language, "Assembly");
+            strcpy(lang_info->compiler, "NASM");
+            free(symbols);
+            free(string_table);
+            fseek(file, current_offset, SEEK_SET);
+            return 0;
+        }
+        if (strstr(sym_name, "_fasm_") == sym_name) {
+            strcpy(lang_info->language, "Assembly");
+            strcpy(lang_info->compiler, "FASM");
+            free(symbols);
+            free(string_table);
+            fseek(file, current_offset, SEEK_SET);
+            return 0;
+        }
     }
 
     free(symbols);
     free(string_table);
     fseek(file, current_offset, SEEK_SET);
 
-    return 0;
+    return -1;
 }
 
 static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
@@ -239,7 +216,8 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
                 struct segment_command *seg_cmd = (struct segment_command *) cmd;
                 nsects = seg_cmd->nsects;
                 sections = (struct section *) (seg_cmd + 1);
-            } else {
+            }
+            else {
                 struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
                 nsects = seg_cmd->nsects;
                 sections = (struct section *) (seg_cmd + 1);
@@ -249,61 +227,72 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
                 char *sectname = sections[j].sectname;
                 char *segname = sections[j].segname;
 
+                // Определение компилятора GCC по специальной секции
+                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, ".gcc_except_table") == 0) {
+                    strcpy(lang_info->language, "C");
+                    strcpy(lang_info->compiler, "GCC");
+                    return 0;
+                }
+
+                // Определение NASM по специфичной секции
+                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__nasm") == 0) {
+                    strcpy(lang_info->language, "Assembly");
+                    strcpy(lang_info->compiler, "NASM");
+                    return 0;
+                }
+
+                // Определение FASM по специфичной секции
+                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__fasm") == 0) {
+                    strcpy(lang_info->language, "Assembly");
+                    strcpy(lang_info->compiler, "FASM");
+                    return 0;
+                }
+
+                // Определение языка Go по секциям
                 if (strcmp(segname, "__TEXT") == 0 && (strcmp(sectname, "__rodata") == 0 ||
-                                                       strcmp(sectname, "__typelink") == 0 || strcmp(sectname, "__itablink") == 0)) {
+                                                       strcmp(sectname, "__typelink") == 0 ||
+                                                       strcmp(sectname, "__itablink") == 0)) {
                     strcpy(lang_info->language, "Go");
                     strcpy(lang_info->compiler, "gc (Go compiler)");
                     return 0;
                 }
 
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__gosymtab") == 0) {
-                    strcpy(lang_info->language, "Go");
-                    strcpy(lang_info->compiler, "gc (Go compiler)");
-                    return 0;
-                }
-
+                // Определение языка Rust по секциям
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__rustc") == 0) {
                     strcpy(lang_info->language, "Rust");
                     strcpy(lang_info->compiler, "rustc");
                     return 0;
                 }
 
-                if (strcmp(segname, "__LLVM") == 0) {
-                    if (strcmp(lang_info->language, "Unknown") == 0) {
-                        strcpy(lang_info->compiler, "LLVM");
-                    }
-                }
-
-                if (strcmp(segname, "__DATA") == 0 && strcmp(sectname, "__objc_data") == 0) {
-                    strcpy(lang_info->language, "Objective-C");
-                    strcpy(lang_info->compiler, "Clang");
-                    return 0;
-                }
-
+                // Определение языка Swift по секциям
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__swift5_proto") == 0) {
                     strcpy(lang_info->language, "Swift");
                     strcpy(lang_info->compiler, "Apple Swift Compiler");
                     return 0;
                 }
 
+                // Определение языка Kotlin по секциям
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__kotlin") == 0) {
                     strcpy(lang_info->language, "Kotlin/Native");
                     strcpy(lang_info->compiler, "Kotlin Native Compiler");
                     return 0;
                 }
 
+                // Определение языка Haskell по секциям
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__haskell_cr") == 0) {
                     strcpy(lang_info->language, "Haskell");
                     strcpy(lang_info->compiler, "GHC");
                     return 0;
                 }
 
+                // Определение Erlang/Elixir по секциям
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__erlang_atom_tab") == 0) {
                     strcpy(lang_info->language, "Erlang/Elixir");
                     strcpy(lang_info->compiler, "Erlang VM");
                     return 0;
                 }
 
+                // Определение языка Assembly по минимальному числу команд загрузки
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__text") == 0 && mach_o_file->command_count <= 5) {
                     strcpy(lang_info->language, "Assembly");
                     strcpy(lang_info->compiler, "Assembler");
@@ -312,10 +301,11 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
             }
         }
 
+        // Переход к следующей команде загрузки
         cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
     }
 
-    return -1;
+    return -1; // Если не удалось определить язык или компилятор по секциям
 }
 
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
@@ -389,27 +379,10 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
                         return 0;
                     }
 
-                    if (strstr(data, "Haskell") || strstr(data, "ghc")) {
-                        strcpy(lang_info->language, "Haskell");
-                        strcpy(lang_info->compiler, "GHC");
-                        free(data);
-                        fseek(file, current_offset, SEEK_SET);
-                        return 0;
-                    }
-
-                    if (strstr(data, "Elixir") || strstr(data, "Erlang")) {
-                        strcpy(lang_info->language, "Erlang/Elixir");
-                        strcpy(lang_info->compiler, "Erlang VM");
-                        free(data);
-                        fseek(file, current_offset, SEEK_SET);
-                        return 0;
-                    }
-
                     free(data);
                 }
             }
         }
-
         cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
     }
 
