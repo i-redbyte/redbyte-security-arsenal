@@ -385,11 +385,70 @@ static void print_dysymtab_command(const struct load_command *cmd, FILE *file) {
 static void print_dylib_command(const struct load_command *cmd) {
     struct dylib_command *dylib_cmd = (struct dylib_command *) cmd;
     char *dylib_name = (char *) cmd + dylib_cmd->dylib.name.offset;
+
+    uint32_t current_version = dylib_cmd->dylib.current_version;
+    uint32_t compatibility_version = dylib_cmd->dylib.compatibility_version;
+
+    // Извлекаем мажорную, минорную и патч-версии
+    uint16_t current_major = (current_version >> 16) & 0xFFFF;
+    uint8_t current_minor = (current_version >> 8) & 0xFF;
+    uint8_t current_patch = current_version & 0xFF;
+
+    uint16_t compat_major = (compatibility_version >> 16) & 0xFFFF;
+    uint8_t compat_minor = (compatibility_version >> 8) & 0xFF;
+    uint8_t compat_patch = compatibility_version & 0xFF;
+
     printf("  LC_LOAD_DYLIB\n");
     printf("  Dylib Name: %s\n", dylib_name);
     printf("  Time Stamp: %u\n", dylib_cmd->dylib.timestamp);
-    printf("  Current Version: %u\n", dylib_cmd->dylib.current_version);
-    printf("  Compatibility Version: %u\n", dylib_cmd->dylib.compatibility_version);
+    printf("  Current Version: %u.%u.%u\n", current_major, current_minor, current_patch);
+    printf("  Compatibility Version: %u.%u.%u\n", compat_major, compat_minor, compat_patch);
+}
+
+void print_dynamic_libraries(const MachOFile *mach_o_file) {
+    if (!mach_o_file || !mach_o_file->commands) {
+        fprintf(stderr, "Invalid Mach-O file or no load commands available.\n");
+        return;
+    }
+
+    struct load_command *cmd = mach_o_file->commands;
+    uint32_t ncmds = mach_o_file->command_count;
+
+    printf("Dynamic Libraries:\n");
+    for (uint32_t i = 0; i < ncmds; i++) {
+        switch (cmd->cmd) {
+            case LC_LOAD_DYLIB:
+            case LC_LOAD_WEAK_DYLIB:
+            case LC_REEXPORT_DYLIB:
+            case LC_LOAD_UPWARD_DYLIB:
+            case LC_LAZY_LOAD_DYLIB: {
+                struct dylib_command *dylib_cmd = (struct dylib_command *) cmd;
+                char *dylib_name = (char *) cmd + dylib_cmd->dylib.name.offset;
+
+                uint32_t current_version = dylib_cmd->dylib.current_version;
+                uint32_t compatibility_version = dylib_cmd->dylib.compatibility_version;
+
+                // Извлекаем мажорную, минорную и патч-версии
+                uint16_t current_major = (current_version >> 16) & 0xFFFF;
+                uint8_t current_minor = (current_version >> 8) & 0xFF;
+                uint8_t current_patch = current_version & 0xFF;
+
+                uint16_t compat_major = (compatibility_version >> 16) & 0xFFFF;
+                uint8_t compat_minor = (compatibility_version >> 8) & 0xFF;
+                uint8_t compat_patch = compatibility_version & 0xFF;
+
+                printf("  %s (Current Version: %u.%u.%u, Compatibility Version: %u.%u.%u)\n",
+                       dylib_name,
+                       current_major, current_minor, current_patch,
+                       compat_major, compat_minor, compat_patch);
+                break;
+            }
+            default:
+                // Игнорируем остальные команды
+                break;
+        }
+        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+    }
 }
 
 static void print_dylinker_command(const struct load_command *cmd) {
@@ -552,3 +611,5 @@ static uint64_t decode_uleb128(const uint8_t **p, const uint8_t *end) {
     }
     return result;
 }
+
+
