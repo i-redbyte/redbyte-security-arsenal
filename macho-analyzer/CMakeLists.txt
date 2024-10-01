@@ -6,6 +6,7 @@ set(SOURCES
         src/macho_analyzer.c
         src/macho_printer.c
         src/language_detector.c
+        src/lc_commands.c
         )
 
 add_library(macho-analyzer STATIC ${SOURCES})

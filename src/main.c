@@ -1,42 +1,67 @@
 #include <stdio.h>
+#include <string.h>
 #include "../macho-analyzer/include/macho_analyzer.h"
 #include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
-#include <string.h>
-#include <string.h>
+#include "../macho-analyzer/include/lc_commands.h"
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s [-l] <mach-o file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [options] <mach-o file or --LC_COMMAND>\n", argv[0]);
         return 1;
     }
 
     int list_dylibs = 0;
+    int list_lc_commands = 0;
+    int russian_language = 0;
     const char *filename = NULL;
+    const char *lc_command = NULL;
 
-    // Парсинг аргументов командной строки
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-l") == 0) {
             list_dylibs = 1;
+        } else if (strcasecmp(argv[i], "--ru") == 0) {
+            russian_language = 1;
+        } else if (strcasecmp(argv[i], "--llc") == 0) {
+            list_lc_commands = 1;
+        } else if (strncasecmp(argv[i], "--LC_", 5) == 0) {
+            lc_command = argv[i] + 2;
         } else {
             filename = argv[i];
         }
     }
 
+    const char *lang = russian_language ? "ru" : "en";
+
+    if (list_lc_commands) {
+        print_all_lc_commands(lang);
+        return 0;
+    }
+
+    if (lc_command) {
+        const LCCommandInfo *info = get_lc_command_info(lc_command);
+        if (info) {
+            print_lc_command_info(info, lang);
+        } else {
+            printf(russian_language ? "Команда %s не найдена.\n" : "Command %s not found.\n", lc_command);
+        }
+        return 0;
+    }
+
     if (!filename) {
-        fprintf(stderr, "No Mach-O file specified.\n");
+        fprintf(stderr, russian_language ? "Не указан файл Mach-O.\n" : "No Mach-O file specified.\n");
         return 1;
     }
 
     FILE *file = fopen(filename, "rb");
     if (!file) {
-        perror("Failed to open file");
+        perror(russian_language ? "Не удалось открыть файл" : "Failed to open file");
         return 1;
     }
 
     MachOFile mach_o_file;
     if (analyze_mach_o(file, &mach_o_file) != 0) {
-        fprintf(stderr, "Failed to analyze Mach-O file.\n");
+        fprintf(stderr, russian_language ? "Не удалось проанализировать файл Mach-O.\n" : "Failed to analyze Mach-O file.\n");
         fclose(file);
         return 1;
     }
@@ -48,13 +73,13 @@ int main(int argc, char *argv[]) {
             print_mach_o_info(&mach_o_file, file);
         }
         LanguageInfo lang_info;
-        if (detect_language_and_compiler(&mach_o_file, (FILE *) file, &lang_info) == 0) {
-            printf("Language and Compiler Information:\n");
-            printf("  Language: %s\n", lang_info.language);
-            printf("  Compiler: %s\n", lang_info.compiler);
+        if (detect_language_and_compiler(&mach_o_file, file, &lang_info) == 0) {
+            printf(russian_language ? "Информация о языке и компиляторе:\n" : "Language and Compiler Information:\n");
+            printf("  %s: %s\n", russian_language ? "Язык" : "Language", lang_info.language);
+            printf("  %s: %s\n", russian_language ? "Компилятор" : "Compiler", lang_info.compiler);
             printf("\n");
         } else {
-            printf("Failed to detect language and compiler information.\n");
+            printf(russian_language ? "Не удалось определить информацию о языке и компиляторе.\n" : "Failed to detect language and compiler information.\n");
         }
         free_mach_o_file(&mach_o_file);
     }
