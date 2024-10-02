@@ -76,7 +76,6 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
     return 0;
 }
 
-
 static int analyze_fat_binary(FILE *file) {
     struct fat_header fatHeader;
     if (read_and_validate(file, &fatHeader, sizeof(struct fat_header), "Failed to read fat header") != 0) {
