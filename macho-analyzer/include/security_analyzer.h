@@ -3,6 +3,15 @@
 
 #include "macho_analyzer.h"
 
+typedef struct {
+    const char *function_name;
+    const char *category;  // Категория проблемы, например, "string operation", "memory operation"
+    const char *severity;  // Уровень критичности: "high", "medium", "low"
+} UnsafeFunctionInfo;
+
+// Список известных небезопасных функций
+extern const UnsafeFunctionInfo unsafe_functions[];
+
 /**
  * Анализирует символы в Mach-O файле на использование небезопасных функций.
  *

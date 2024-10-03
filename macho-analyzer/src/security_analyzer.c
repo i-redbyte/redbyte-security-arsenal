@@ -6,86 +6,89 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Список известных небезопасных функций
-const char *unsafe_functions[] = {
+const UnsafeFunctionInfo unsafe_functions[] = {
         // Стандартные небезопасные функции C
-        "strcpy",      // Может привести к переполнению буфера
-        "strncpy",     // Может привести к некорректному завершению строки
-        "sprintf",     // Может привести к переполнению буфера
-        "snprintf",    // Может привести к некорректному завершению строки
-        "vsprintf",    // Может привести к переполнению буфера
-        "vsnprintf",   // Может привести к некорректному завершению строки
-        "gets",        // Чтение данных без ограничения длины
-        "fgets",       // Потенциальная ошибка при неверном использовании
-        "scanf",       // Форматирование строки может привести к ошибкам
-        "sscanf",      // Форматирование строки может привести к ошибкам
-        "strcat",      // Может привести к переполнению буфера
-        "strncat",     // Может привести к некорректному завершению строки
-        "memcpy",      // Может привести к переполнению буфера
-        "memmove",     // Ошибки при копировании памяти
-        "memset",      // Ошибки при работе с памятью
-        "bcopy",       // Старый и небезопасный метод копирования памяти
-        "bzero",       // Старый и небезопасный метод обнуления памяти
-        "malloc",      // Ошибки при выделении памяти могут привести к уязвимостям
-        "realloc",     // Ошибки при перераспределении памяти
-        "free",        // Потенциальные ошибки двойного освобождения
-        "calloc",      // Ошибки при выделении памяти могут привести к уязвимостям
+        {"strcpy", "string operation", "high"},
+        {"strncpy", "string operation", "medium"},
+        {"sprintf", "string operation", "high"},
+        {"snprintf", "string operation", "medium"},
+        {"vsprintf", "string operation", "high"},
+        {"vsnprintf", "string operation", "medium"},
+        {"gets", "input operation", "high"},
+        {"fgets", "input operation", "medium"},
+        {"scanf", "input operation", "medium"},
+        {"sscanf", "input operation", "medium"},
+        {"strcat", "string operation", "medium"},
+        {"strncat", "string operation", "medium"},
 
-        // Функции работы со строками
-        "strdup",      // Может привести к утечке памяти
-        "stpcpy",      // Может привести к переполнению буфера
-        "strtok",      // Не потокобезопасная функция разбора строк
-        "strncpy_s",   // Может привести к обрезанию строки
-
-        // Форматирование строк
-        "vsprintf",    // Форматирование строки без ограничения
-        "asprintf",    // Может привести к переполнению буфера
-        "vasprintf",   // Может привести к переполнению буфера
-
-        // Работа с файлами
-        "fopen",       // Не безопасна для использования без проверки ошибок
-        "fclose",      // Ошибки при закрытии файлового дескриптора могут привести к утечкам
-        "fread",       // Неправильное использование может привести к ошибкам
-        "fwrite",      // Неправильное использование может привести к ошибкам
+        // Работа с памятью
+        {"memcpy", "memory operation", "medium"},
+        {"memmove", "memory operation", "medium"},
+        {"memset", "memory operation", "medium"},
+        {"bcopy", "memory operation", "high"},
+        {"bzero", "memory operation", "high"},
 
         // Динамическое выделение памяти
-        "alloca",      // Может привести к переполнению стека
-        "valloc",      // Может привести к проблемам при управлении памятью
-        "posix_memalign", // Ошибки при неправильном выделении памяти
+        {"malloc", "memory allocation", "low"},
+        {"realloc", "memory allocation", "low"},
+        {"free", "memory deallocation", "low"},
+        {"calloc", "memory allocation", "low"},
+
+        // Функции работы со строками
+        {"strdup", "memory allocation", "medium"},
+        {"stpcpy", "string operation", "medium"},
+        {"strtok", "string operation", "low"},
+        {"strncpy_s", "string operation", "low"},
+
+        // Форматирование строк
+        {"asprintf", "string operation", "medium"},
+        {"vasprintf", "string operation", "medium"},
+
+        // Работа с файлами
+        {"fopen", "file operation", "low"},
+        {"fclose", "file operation", "low"},
+        {"fread", "file operation", "medium"},
+        {"fwrite", "file operation", "medium"},
+
+        // Динамическое выделение памяти
+        {"alloca", "memory allocation", "high"},
+        {"valloc", "memory allocation", "medium"},
+        {"posix_memalign", "memory allocation", "low"},
 
         // Потокобезопасность
-        "rand",        // Не потокобезопасная генерация случайных чисел
-        "srand",       // Использование устаревших методов генерации случайных чисел
-        "drand48",     // Устаревший метод генерации случайных чисел
-        "lrand48",     // Устаревший метод генерации случайных чисел
-        "random",      // Устаревший метод генерации случайных чисел
+        {"rand", "random generation", "medium"},
+        {"srand", "random generation", "medium"},
+        {"drand48", "random generation", "medium"},
+        {"lrand48", "random generation", "medium"},
+        {"random", "random generation", "medium"},
 
         // Опасные сетевые функции
-        "gethostbyname",   // Может вызвать переполнение буфера
-        "gethostbyaddr",   // Может вызвать переполнение буфера
-        "inet_ntoa",       // Не потокобезопасная функция преобразования IP адресов
-        "inet_aton",       // Не потокобезопасная функция преобразования IP адресов
-        "getaddrinfo",     // Неправильное использование может привести к утечкам памяти
-        "getnameinfo",     // Неправильное использование может привести к утечкам памяти
+        {"gethostbyname", "network operation", "high"},
+        {"gethostbyaddr", "network operation", "high"},
+        {"inet_ntoa", "network operation", "medium"},
+        {"inet_aton", "network operation", "medium"},
+        {"getaddrinfo", "network operation", "medium"},
+        {"getnameinfo", "network operation", "medium"},
 
         // Управление процессами
-        "system",      // Использование может привести к выполнению вредоносного кода
-        "popen",       // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "exec",        // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execl",       // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execle",      // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execlp",      // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execv",       // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execvp",      // Может вызвать проблемы с безопасностью при использовании внешних процессов
-        "execve",      // Может вызвать проблемы с безопасностью при использовании внешних процессов
+        {"system", "process execution", "high"},
+        {"popen", "process execution", "high"},
+        {"exec", "process execution", "high"},
+        {"execl", "process execution", "high"},
+        {"execle", "process execution", "high"},
+        {"execlp", "process execution", "high"},
+        {"execv", "process execution", "high"},
+        {"execvp", "process execution", "high"},
+        {"execve", "process execution", "high"},
 
         // Потоки
-        "pthread_create",  // Неправильное использование может вызвать проблемы с управлением потоками
-        "pthread_exit",    // Неправильное завершение потоков может привести к проблемам
-        "pthread_cancel",  // Потенциально опасная функция для завершения потоков
+        {"pthread_create", "thread management", "medium"},
+        {"pthread_exit", "thread management", "medium"},
+        {"pthread_cancel", "thread management", "medium"},
 
-        NULL
+        {NULL, NULL, NULL}  // Завершающий элемент массива
 };
+
 
 int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
     struct symtab_command *symtab_cmd = NULL;
@@ -130,6 +133,8 @@ int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
         return -1;
     }
 
+    int unsafe_function_count = 0;  // Счётчик небезопасных функций
+
     for (uint32_t i = 0; i < symtab_cmd->nsyms; i++) {
         char *sym_name;
         if (mach_o_file->is_64_bit) {
@@ -140,16 +145,26 @@ int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
             sym_name = string_table + sym->n_un.n_strx;
         }
 
-        // Проверка на небезопасные функции
-        for (int j = 0; unsafe_functions[j] != NULL; j++) {
-            if (strstr(sym_name, unsafe_functions[j]) != NULL) {
-                printf("Warning: Detected use of unsafe function: %s\n", sym_name);
+        // Проверка символа на небезопасные функции
+        for (int j = 0; unsafe_functions[j].function_name != NULL; j++) {
+            if (strstr(sym_name, unsafe_functions[j].function_name) != NULL) {
+                printf("Warning: Detected use of unsafe function: %s\n", unsafe_functions[j].function_name);
+                printf("  Category: %s\n", unsafe_functions[j].category);
+                printf("  Severity: %s\n", unsafe_functions[j].severity);
+                unsafe_function_count++;
             }
         }
     }
 
     free(symbols);
     free(string_table);
+
+    if (unsafe_function_count > 0) {
+        printf("Total unsafe functions detected: %d\n", unsafe_function_count);
+    } else {
+        printf("No unsafe functions detected.\n");
+    }
+
     return 0;
 }
 

@@ -89,7 +89,6 @@ int main(int argc, char *argv[]) {
         }
         free_mach_o_file(&mach_o_file);
     }
-
     fclose(file);
     return 0;
 }
