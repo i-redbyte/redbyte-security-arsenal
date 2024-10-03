@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <security_analyzer.h>
 #include "../macho-analyzer/include/macho_analyzer.h"
 #include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
@@ -72,6 +73,11 @@ int main(int argc, char *argv[]) {
         } else {
             print_mach_o_info(&mach_o_file, file);
         }
+
+        analyze_unsafe_functions(&mach_o_file, file);
+        analyze_section_permissions(&mach_o_file, file);
+        analyze_debug_symbols(&mach_o_file, file);
+
         LanguageInfo lang_info;
         if (detect_language_and_compiler(&mach_o_file, file, &lang_info) == 0) {
             printf(russian_language ? "Информация о языке и компиляторе:\n" : "Language and Compiler Information:\n");
