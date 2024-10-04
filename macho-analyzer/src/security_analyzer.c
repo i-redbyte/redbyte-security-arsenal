@@ -89,8 +89,20 @@ const UnsafeFunctionInfo unsafe_functions[] = {
         {NULL, NULL, NULL}  // Завершающий элемент массива
 };
 
+HashTable *initialize_unsafe_function_table() {
+    HashTable *table = hash_table_create();
+    if (!table) {
+        return NULL;
+    }
+    for (int i = 0; unsafe_functions[i].function_name != NULL; i++) {
+        hash_table_insert(table, unsafe_functions[i].function_name, (void *)&unsafe_functions[i]);
+    }
+    return table;
+}
 
-int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
+
+
+int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file, HashTable *unsafe_function_table) {
     struct symtab_command *symtab_cmd = NULL;
     struct load_command *cmd = mach_o_file->commands;
     uint32_t ncmds = mach_o_file->command_count;
@@ -98,10 +110,10 @@ int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
     // Поиск команды LC_SYMTAB
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_SYMTAB) {
-            symtab_cmd = (struct symtab_command *) cmd;
+            symtab_cmd = (struct symtab_command *)cmd;
             break;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     if (!symtab_cmd || symtab_cmd->nsyms == 0) {
@@ -133,26 +145,30 @@ int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
         return -1;
     }
 
-    int unsafe_function_count = 0;  // Счётчик небезопасных функций
+    int unsafe_function_count = 0;
 
     for (uint32_t i = 0; i < symtab_cmd->nsyms; i++) {
         char *sym_name;
         if (mach_o_file->is_64_bit) {
-            struct nlist_64 *sym = &((struct nlist_64 *) symbols)[i];
+            struct nlist_64 *sym = &((struct nlist_64 *)symbols)[i];
             sym_name = string_table + sym->n_un.n_strx;
         } else {
-            struct nlist *sym = &((struct nlist *) symbols)[i];
+            struct nlist *sym = &((struct nlist *)symbols)[i];
             sym_name = string_table + sym->n_un.n_strx;
         }
 
-        // Проверка символа на небезопасные функции
-        for (int j = 0; unsafe_functions[j].function_name != NULL; j++) {
-            if (strstr(sym_name, unsafe_functions[j].function_name) != NULL) {
-                printf("Warning: Detected use of unsafe function: %s\n", unsafe_functions[j].function_name);
-                printf("  Category: %s\n", unsafe_functions[j].category);
-                printf("  Severity: %s\n", unsafe_functions[j].severity);
-                unsafe_function_count++;
-            }
+        // Удаление префикса '_', если он присутствует
+        if (sym_name[0] == '_') {
+            sym_name++;
+        }
+
+        // Проверка наличия символа в хеш-таблице
+        if (hash_table_contains(unsafe_function_table, sym_name)) {
+            UnsafeFunctionInfo *info = (UnsafeFunctionInfo *)hash_table_get(unsafe_function_table, sym_name);
+            printf("Warning: Detected use of unsafe function: %s\n", info->function_name);
+            printf("  Category: %s\n", info->category);
+            printf("  Severity: %s\n", info->severity);
+            unsafe_function_count++;
         }
     }
 
@@ -167,7 +183,6 @@ int analyze_unsafe_functions(const MachOFile *mach_o_file, FILE *file) {
 
     return 0;
 }
-
 int analyze_section_permissions(const MachOFile *mach_o_file, FILE *file) {
     struct load_command *cmd = mach_o_file->commands;
 

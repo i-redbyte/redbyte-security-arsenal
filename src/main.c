@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <security_analyzer.h>
-#include "../macho-analyzer/include/macho_analyzer.h"
+#include <hash_table.h>
 #include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
 #include "../macho-analyzer/include/lc_commands.h"
@@ -74,10 +74,20 @@ int main(int argc, char *argv[]) {
             print_mach_o_info(&mach_o_file, file);
         }
 
-        analyze_unsafe_functions(&mach_o_file, file);
         analyze_section_permissions(&mach_o_file, file);
         analyze_debug_symbols(&mach_o_file, file);
+        HashTable *unsafe_function_table = initialize_unsafe_function_table();
+        if (!unsafe_function_table) {
+            fprintf(stderr, "Failed to initialize unsafe function table\n");
+            fclose(file);
+            return 1;
+        }
 
+        if (analyze_unsafe_functions(&mach_o_file, file, unsafe_function_table) != 0) {
+            fprintf(stderr, "Error analyzing unsafe functions\n");
+        }
+
+        hash_table_destroy(unsafe_function_table, NULL);
         LanguageInfo lang_info;
         if (detect_language_and_compiler(&mach_o_file, file, &lang_info) == 0) {
             printf(russian_language ? "Информация о языке и компиляторе:\n" : "Language and Compiler Information:\n");
