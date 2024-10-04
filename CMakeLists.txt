@@ -3,6 +3,8 @@ project(mac-security C)
 
 set(CMAKE_C_STANDARD 11)
 
+enable_testing()
+
 add_subdirectory(macho-analyzer)
 
 find_package(Curses REQUIRED)
@@ -14,5 +16,6 @@ set(SOURCES
         )
 add_executable(mac-security ${SOURCES})
 target_link_libraries(mac-security PRIVATE macho-analyzer ${CURSES_LIBRARIES})
-
 target_include_directories(mac-security PRIVATE macho-analyzer/include)
+
+add_subdirectory(tests)
