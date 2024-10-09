@@ -23,4 +23,11 @@ void print_mach_o_info(const MachOFile *mach_o_file, FILE *file);
  */
 void print_dynamic_libraries(const MachOFile *mach_o_file);
 
+/**
+ * Функция для вывода информации заголовка Mach-O файла.
+ *
+ * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о файле.
+ */
+void print_header_info(const MachOFile *mach_o_file);
+
 #endif //MAC_SECURITY_MACHO_PRINTER_H

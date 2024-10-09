@@ -1,3 +1,4 @@
+#include "macho_printer.h"
 #include "macho_analyzer.h"
 #include <stdlib.h>
 #include <string.h>
@@ -13,13 +14,6 @@
  * @return Декодированное значение.
  */
 static uint64_t decode_uleb128(const uint8_t **p, const uint8_t *end);
-
-/**
- * Функция для вывода информации заголовка Mach-O файла.
- *
- * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о файле.
- */
-static void print_header_info(const MachOFile *mach_o_file);
 
 /**
  * Функция для вывода команды сегмента.
@@ -229,7 +223,7 @@ void print_mach_o_info(const MachOFile *mach_o_file, FILE *file) {
     }
 }
 
-static void print_header_info(const MachOFile *mach_o_file) {
+void print_header_info(const MachOFile *mach_o_file) {
     printf("Mach-O Header:\n");
     if (mach_o_file->is_64_bit) {
         printf("  64-bit Mach-O File\n");
