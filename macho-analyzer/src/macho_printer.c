@@ -1,5 +1,6 @@
 #include "macho_printer.h"
 #include "macho_analyzer.h"
+#include "security_check.h"
 #include <stdlib.h>
 #include <string.h>
 #include <mach-o/nlist.h>
@@ -146,7 +147,9 @@ void print_mach_o_info(const MachOFile *mach_o_file, FILE *file) {
     }
 
     print_header_info(mach_o_file);
-
+    printf("===========================>SECURITY CHECK>========================================:\n");
+    check_security_features(mach_o_file, file);
+    printf("===========================<SECURITY CHECK<========================================:\n");
     struct load_command *cmd = mach_o_file->commands;
     uint32_t ncmds = mach_o_file->command_count;
 
