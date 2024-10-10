@@ -35,12 +35,10 @@ static bool check_dep(const MachOFile *mach_o_file) {
  * @return true, если Stack Canaries используются, false — если нет.
  */
 static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
-    // Проверяем, есть ли символы в Mach-O файле и команды
-    if (!mach_o_file || !mach_o_file->commands || !file) {
+    if (!mach_o_file->commands || !file) {
         return false;
     }
 
-    // Ищем команду LC_SYMTAB, которая содержит информацию о таблице символов
     struct load_command *cmd = mach_o_file->commands;
     struct symtab_command *symtab_cmd = NULL;
 
@@ -56,7 +54,6 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
         return false;  // Нет таблицы символов
     }
 
-    // Переходим к таблице символов и читаем её
     fseek(file, symtab_cmd->symoff, SEEK_SET);
     size_t symbol_size = mach_o_file->is_64_bit ? sizeof(struct nlist_64) : sizeof(struct nlist);
     void *symbols = malloc(symtab_cmd->nsyms * symbol_size);
@@ -71,7 +68,6 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
         return false;
     }
 
-    // Переходим к строковой таблице и читаем её
     fseek(file, symtab_cmd->stroff, SEEK_SET);
     char *string_table = malloc(symtab_cmd->strsize);
     if (!string_table) {
@@ -87,13 +83,12 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
         return false;
     }
 
-    // Ищем символы __stack_chk_fail и __stack_chk_guard
     bool found_stack_chk_fail = false;
     bool found_stack_chk_guard = false;
 
     for (uint32_t j = 0; j < symtab_cmd->nsyms; j++) {
         if (mach_o_file->is_64_bit) {
-            struct nlist_64 *sym = &((struct nlist_64 *)symbols)[j];
+            struct nlist_64 *sym = &((struct nlist_64 *) symbols)[j];
             char *symbol_name = string_table + sym->n_un.n_strx;
             if (strcmp(symbol_name, "__stack_chk_fail") == 0) {
                 found_stack_chk_fail = true;
@@ -102,7 +97,7 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
                 found_stack_chk_guard = true;
             }
         } else {
-            struct nlist *sym = &((struct nlist *)symbols)[j];
+            struct nlist *sym = &((struct nlist *) symbols)[j];
             char *symbol_name = string_table + sym->n_un.n_strx;
             if (strcmp(symbol_name, "__stack_chk_fail") == 0) {
                 found_stack_chk_fail = true;
@@ -113,15 +108,12 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
         }
 
         if (found_stack_chk_fail && found_stack_chk_guard) {
-            break;  // Прерываем цикл, если нашли оба символа
+            break;
         }
     }
-
-    // Освобождаем ресурсы
     free(symbols);
     free(string_table);
 
-    // Возвращаем true, если оба символа найдены
     return found_stack_chk_fail && found_stack_chk_guard;
 }
 

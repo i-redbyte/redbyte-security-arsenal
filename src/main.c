@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <security_analyzer.h>
-#include <hash_table.h>
+#include "../libs/hash_table/hash_table.h"
 #include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
 #include "../macho-analyzer/include/lc_commands.h"

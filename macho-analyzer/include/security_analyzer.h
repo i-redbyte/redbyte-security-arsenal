@@ -2,7 +2,7 @@
 #define SECURITY_ANALYZER_H
 
 #include "macho_analyzer.h"
-#include "hash_table.h"
+#include "../../libs/hash_table/hash_table.h"
 
 /**
  * Структура, содержащая информацию о небезопасной функции.

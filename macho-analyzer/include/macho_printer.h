@@ -1,5 +1,5 @@
-#ifndef MAC_SECURITY_MACHO_PRINTER_H
-#define MAC_SECURITY_MACHO_PRINTER_H
+#ifndef MACHO_ANALYZER_MACHO_PRINTER_H
+#define MACHO_ANALYZER_MACHO_PRINTER_H
 
 #include "macho_analyzer.h"
 #include <mach-o/nlist.h>
@@ -30,4 +30,4 @@ void print_dynamic_libraries(const MachOFile *mach_o_file);
  */
 void print_header_info(const MachOFile *mach_o_file);
 
-#endif //MAC_SECURITY_MACHO_PRINTER_H
+#endif //MACHO_ANALYZER_MACHO_PRINTER_H

@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.19)
-project(mac-security C)
+project(red_byte-security-arsenal C)
 
 set(CMAKE_C_STANDARD 11)
 
 enable_testing()
 
+add_subdirectory(libs/hash_table)
 add_subdirectory(macho-analyzer)
 
 find_package(Curses REQUIRED)
@@ -14,8 +15,9 @@ set(SOURCES
         src/main.c
         src/ui.c
         )
-add_executable(mac-security ${SOURCES})
-target_link_libraries(mac-security PRIVATE macho-analyzer ${CURSES_LIBRARIES})
-target_include_directories(mac-security PRIVATE macho-analyzer/include)
+
+add_executable(${PROJECT_NAME} ${SOURCES})
+target_link_libraries(${PROJECT_NAME} PRIVATE macho-analyzer ${CURSES_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PRIVATE macho-analyzer/include)
 
 add_subdirectory(tests)

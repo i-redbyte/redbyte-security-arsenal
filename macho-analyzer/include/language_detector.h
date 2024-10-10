@@ -1,5 +1,5 @@
-#ifndef LANGUAGE_DETECTOR_H
-#define LANGUAGE_DETECTOR_H
+#ifndef MACHO_ANALYZER_LANGUAGE_DETECTOR_H
+#define MACHO_ANALYZER_LANGUAGE_DETECTOR_H
 
 #include "macho_analyzer.h"
 
@@ -48,4 +48,4 @@ typedef struct {
  */
 int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
 
-#endif // LANGUAGE_DETECTOR_H
+#endif // MACHO_ANALYZER_LANGUAGE_DETECTOR_H

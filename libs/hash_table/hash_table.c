@@ -5,18 +5,6 @@
 #define INITIAL_TABLE_SIZE 256
 #define LOAD_FACTOR_THRESHOLD 0.75
 
-typedef struct HashNode {
-    char *key;
-    void *value;
-    struct HashNode *next;
-} HashNode;
-
-typedef struct HashTable {
-    HashNode **buckets;
-    size_t size;
-    size_t count;
-} HashTable;
-
 static unsigned int hash(const char *key) {
     unsigned int hash = 5381;
     int c;
@@ -26,7 +14,7 @@ static unsigned int hash(const char *key) {
     return hash;
 }
 
-HashTable *hash_table_create() {
+HashTable *hash_table_create(void) {
     HashTable *table = malloc(sizeof(HashTable));
     if (table) {
         table->size = INITIAL_TABLE_SIZE;

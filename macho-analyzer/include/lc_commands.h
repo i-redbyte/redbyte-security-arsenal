@@ -1,5 +1,5 @@
-#ifndef LC_COMMANDS_H
-#define LC_COMMANDS_H
+#ifndef MACHO_ANALYZER_LC_COMMANDS_H
+#define MACHO_ANALYZER_LC_COMMANDS_H
 
 #include <stdio.h>
 #include <string.h>
@@ -37,4 +37,4 @@ void print_lc_command_info(const LCCommandInfo *info, const char *lang);
  */
 void print_all_lc_commands(const char *lang);
 
-#endif // LC_COMMANDS_H
+#endif // MACHO_ANALYZER_LC_COMMANDS_H

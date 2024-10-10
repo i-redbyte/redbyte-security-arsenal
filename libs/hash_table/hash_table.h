@@ -1,12 +1,23 @@
-#ifndef HASH_TABLE_H
-#define HASH_TABLE_H
+#ifndef RED_BYTE_SECURITY_ARSENAL_HASH_TABLE_H
+#define RED_BYTE_SECURITY_ARSENAL_HASH_TABLE_H
 
 #include <stdbool.h>
+#include <stddef.h>
+
+typedef struct HashNode {
+    char *key;
+    void *value;
+    struct HashNode *next;
+} HashNode;
 
 /**
  * Структура, представляющая хеш-таблицу.
  */
-typedef struct HashTable HashTable;
+typedef struct HashTable {
+    HashNode **buckets;
+    size_t size;
+    size_t count;
+} HashTable;
 
 /**
  * Создает новую хеш-таблицу.
@@ -15,7 +26,7 @@ typedef struct HashTable HashTable;
  *
  * @return Указатель на созданную хеш-таблицу, или NULL, если произошла ошибка.
  */
-HashTable *hash_table_create();
+HashTable *hash_table_create(void);
 
 /**
  * Уничтожает хеш-таблицу и освобождает всю связанную с ней память.
@@ -73,4 +84,4 @@ void *hash_table_get(HashTable *table, const char *key);
  */
 void hash_table_resize(HashTable *table);
 
-#endif // HASH_TABLE_H
+#endif // RED_BYTE_SECURITY_ARSENAL_HASH_TABLE_H
