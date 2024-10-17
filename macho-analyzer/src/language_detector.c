@@ -5,6 +5,137 @@
 #include <stdio.h>
 
 typedef struct {
+    const char *segment_name;
+    const char *section_name;
+    const char *language;
+    const char *compiler;
+} SectionMapping;
+
+static const SectionMapping section_mappings[] = {
+        // C и компиляторы
+        {"__TEXT", "__cstring", "C", "Clang"},
+        {"__DATA", "__data", "C", "Clang"},
+        {"__TEXT", "__unwind_info", "C", "Clang"},
+        {"__DATA", "__data", "C", "GCC"},
+
+        // C++
+        {"__TEXT", ".gcc_except_table", "C++", "GCC"},
+        {"__TEXT", "__const", "C++", "Clang"},
+        {"__TEXT", "__cstring", "C++", "Clang"},
+        {"__DATA", "__const", "C++", "Clang"},
+        {"__TEXT", "__ZTI", "C++", "Clang"}, // RTTI info
+        {"__TEXT", "__static_init", "C++", "Clang"},
+
+        // Objective-C
+        {"__DATA", "__objc_classlist", "Objective-C", "Clang"},
+        {"__DATA", "__objc_selrefs", "Objective-C", "Clang"},
+        {"__TEXT", "__objc_methname", "Objective-C", "Clang"},
+        {"__TEXT", "__objc_const", "Objective-C", "Clang"},
+        {"__TEXT", "__objc_classname", "Objective-C", "Clang"},
+        {"__DATA", "__objc_const", "Objective-C", "Clang"},
+
+        // Swift
+        {"__TEXT", "__swift5_proto", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_types", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_fieldmd", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_assocty", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_replace", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_builtin", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_capture", "Swift", "Apple Swift Compiler"},
+
+        // Go
+        {"__TEXT", "__rodata", "Go", "gc (Go compiler)"},
+        {"__TEXT", "__typelink", "Go", "gc (Go compiler)"},
+        {"__TEXT", "__itablink", "Go", "gc (Go compiler)"},
+        {"__DATA", "__go_buildinfo", "Go", "gc (Go compiler)"},
+        {"__TEXT", "__gosymtab", "Go", "gc (Go compiler)"},
+        {"__TEXT", "__gopclntab", "Go", "gc (Go compiler)"},
+
+        // Rust
+        {"__TEXT", "__rustc", "Rust", "rustc"},
+        {"__DATA", "__rust_extern_crate_map", "Rust", "rustc"},
+        {"__TEXT", "__llvm_prf_names", "Rust", "rustc"},
+        {"__DATA", "__llvm_prf_cnts", "Rust", "rustc"},
+
+        // Assembly
+        {"__TEXT", "__text", "Assembly", "Assembler"},
+
+        // Kotlin/Native
+        {"__TEXT", "__kotlin", "Kotlin/Native", "Kotlin Native Compiler"},
+        {"__DATA", "__kotlin_metadata", "Kotlin/Native", "Kotlin Native Compiler"},
+
+        // Haskell
+        {"__TEXT", "__stginit", "Haskell", "GHC"},
+        {"__TEXT", "__hs_info", "Haskell", "GHC"},
+        {"__DATA", "__hs_data", "Haskell", "GHC"},
+        {"__TEXT", "__hs_lct", "Haskell", "GHC"},
+
+        // Erlang/Elixir
+        {"__TEXT", "__erlang_atom_tab", "Erlang", "Erlang VM"},
+        {"__DATA", "__erlang_module_info", "Erlang", "Erlang VM"},
+        {"__TEXT", "__elixir_module_info", "Elixir", "Erlang VM"},
+
+        // Java (GraalVM Native Image)
+        {"__TEXT", "__graalvm", "Java", "GraalVM Native Image"},
+        {"__DATA", "__graalvm_data", "Java", "GraalVM Native Image"},
+
+        // LuaJIT
+        {"__TEXT", "__luajit_bc", "Lua", "LuaJIT Compiler"},
+        {"__TEXT", "__luajit", "Lua", "LuaJIT Compiler"},
+        {"__DATA", "__luajit_data", "Lua", "LuaJIT Compiler"},
+
+        // Ruby
+        {"__TEXT", "__ruby", "Ruby", "Ruby Interpreter"},
+        {"__DATA", "__ruby_symbols", "Ruby", "Ruby Interpreter"},
+        {"__TEXT", "__rb_funcall", "Ruby", "Ruby Interpreter"},
+        {"__DATA", "__rb_symbols", "Ruby", "Ruby Interpreter"},
+
+        // D
+        {"__TEXT", "__dmd_gc", "D", "DMD"},
+        {"__DATA", "__dmd_data", "D", "DMD"},
+        {"__TEXT", "__dmd_script", "D", "DMD"},
+        {"__DATA", "__dmd_tls", "D", "DMD"},
+
+        // Nim
+        {"__TEXT", "__nimrod", "Nim", "Nim Compiler"},
+        {"__DATA", "__nimdata", "Nim", "Nim Compiler"},
+        {"__TEXT", "__nimrtl", "Nim", "Nim Compiler"},
+        {"__DATA", "__nimtls", "Nim", "Nim Compiler"},
+
+        // OCaml
+        {"__TEXT", "__caml_code", "OCaml", "OCaml Compiler"},
+        {"__DATA", "__caml_globals", "OCaml", "OCaml Compiler"},
+
+        // Crystal
+        {"__TEXT", "__crystal", "Crystal", "Crystal Compiler"},
+        {"__DATA", "__crystal_data", "Crystal", "Crystal Compiler"},
+        {"__TEXT", "__crystal_init", "Crystal", "Crystal Compiler"},
+        {"__DATA", "__crystal_globals", "Crystal", "Crystal Compiler"},
+
+        // Zig
+        {"__TEXT", "__zig", "Zig", "Zig Compiler"},
+        {"__DATA", "__zig_data", "Zig", "Zig Compiler"},
+        {"__TEXT", "__zig_strings", "Zig", "Zig Compiler"},
+        {"__DATA", "__zig_globals", "Zig", "Zig Compiler"},
+
+        // Julia
+        {"__TEXT", "__julia", "Julia", "Julia Compiler"},
+        {"__DATA", "__julia_data", "Julia", "Julia Compiler"},
+        {"__TEXT", "__julia_fns", "Julia", "Julia Compiler"},
+        {"__DATA", "__julia_consts", "Julia", "Julia Compiler"},
+
+        // Lisp (SBCL)
+        {"__TEXT", "__sbcl_text", "Common Lisp", "SBCL"},
+        {"__DATA", "__sbcl_data", "Common Lisp", "SBCL"},
+
+        // Scala Native
+        {"__TEXT", "__scala_entry", "Scala", "Scala Native"},
+        {"__DATA", "__scala_data", "Scala", "Scala Native"},
+        {"__TEXT", "__scalanative_func", "Scala", "Scala Native"},
+        {"__DATA", "__scalanative_data", "Scala", "Scala Native"}
+};
+
+typedef struct {
     char detected_language_by_symbols[64];
     char detected_compiler_by_symbols[64];
     char detected_language_by_sections[64];
@@ -99,8 +230,6 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
  *
  * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о командах загрузки
  *                    и секциях файла Mach-O.
- * @param file Указатель на открытый файл Mach-O для чтения данных секций.
- *             Файл должен быть открыт на чтение.
  * @param lang_info Указатель на структуру LanguageInfo, в которую будет записана информация о языке
  *                  и компиляторе после анализа секций. Если определен специфичный для компилятора
  *                  или языка сегмент или секция, данные будут сохранены в lang_info.
@@ -114,7 +243,7 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
  * - Если не удается определить язык или компилятор по секциям, функция возвращает -1, и тогда
  *   можно использовать другие методы анализа.
  */
-static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
+static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_info);
 
 /**
  * @brief Анализирует строки данных в Mach-O файле для определения языка и компилятора.
@@ -146,6 +275,8 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
 static void combine_results(DetectionResults *results);
 
+static int check_section(const char *segname, const char *sectname, LanguageInfo *lang_info);
+
 int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
     if (!mach_o_file || !file || !lang_info) {
         fprintf(stderr, "Invalid arguments to detect_language_and_compiler\n");
@@ -169,7 +300,7 @@ int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, Langu
         strcpy(results.detected_compiler_by_symbols, temp_lang_info.compiler);
     }
 
-    if (analyze_sections(mach_o_file, file, &temp_lang_info) == 0) {
+    if (analyze_sections(mach_o_file, &temp_lang_info) == 0) {
         strcpy(results.detected_language_by_sections, temp_lang_info.language);
         strcpy(results.detected_compiler_by_sections, temp_lang_info.compiler);
     }
@@ -306,96 +437,77 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
     return -1;
 }
 
-static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
+static int check_section(const char *segname, const char *sectname, LanguageInfo *lang_info) {
+    for (size_t i = 0; i < sizeof(section_mappings) / sizeof(SectionMapping); i++) {
+        if (strcmp(segname, section_mappings[i].segment_name) == 0 &&
+            strcmp(sectname, section_mappings[i].section_name) == 0) {
+            strcpy(lang_info->language, section_mappings[i].language);
+            strcpy(lang_info->compiler, section_mappings[i].compiler);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_info) {
+    strcpy(lang_info->language, "Unknown");
+    strcpy(lang_info->compiler, "Unknown");
+
     struct load_command *cmd = mach_o_file->commands;
     uint32_t ncmds = mach_o_file->command_count;
 
     for (uint32_t i = 0; i < ncmds; i++) {
+        if (cmd->cmdsize == 0) {
+            fprintf(stderr, "Invalid command size in load command\n");
+            return -1;
+        }
+
         if (cmd->cmd == LC_SEGMENT || cmd->cmd == LC_SEGMENT_64) {
-            uint32_t nsects;
-            struct section *sections = NULL;
+            uint32_t nsects = 0;
+            void *sections = NULL;
 
             if (cmd->cmd == LC_SEGMENT) {
                 struct segment_command *seg_cmd = (struct segment_command *) cmd;
                 nsects = seg_cmd->nsects;
-                sections = (struct section *) (seg_cmd + 1);
-            } else {
+                sections = (void *) (seg_cmd + 1);
+            } else { // LC_SEGMENT_64
                 struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
                 nsects = seg_cmd->nsects;
-                sections = (struct section *) (seg_cmd + 1);
+                sections = (void *) (seg_cmd + 1);
+            }
+
+            // Проверка корректности числа секций
+            if (nsects == 0 || sections == NULL) {
+                cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+                continue;
             }
 
             for (uint32_t j = 0; j < nsects; j++) {
-                char *sectname = sections[j].sectname;
-                char *segname = sections[j].segname;
+                char segname[17] = {0};
+                char sectname[17] = {0};
 
-                // Определение компилятора GCC по специальной секции
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, ".gcc_except_table") == 0) {
-                    strcpy(lang_info->language, "C");
-                    strcpy(lang_info->compiler, "GCC");
+                if (cmd->cmd == LC_SEGMENT) {
+                    struct section *section = &((struct section *) sections)[j];
+
+                    memcpy(segname, section->segname, 16);
+                    segname[16] = '\0';
+                    memcpy(sectname, section->sectname, 16);
+                    sectname[16] = '\0';
+                } else { // LC_SEGMENT_64
+                    struct section_64 *section = &((struct section_64 *) sections)[j];
+
+                    memcpy(segname, section->segname, 16);
+                    segname[16] = '\0';
+                    memcpy(sectname, section->sectname, 16);
+                    sectname[16] = '\0';
+                }
+
+                if (check_section(segname, sectname, lang_info) == 0) {
                     return 0;
                 }
 
-                // Определение NASM по специфичной секции
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__nasm") == 0) {
-                    strcpy(lang_info->language, "Assembly");
-                    strcpy(lang_info->compiler, "NASM");
-                    return 0;
-                }
-
-                // Определение FASM по специфичной секции
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__fasm") == 0) {
-                    strcpy(lang_info->language, "Assembly");
-                    strcpy(lang_info->compiler, "FASM");
-                    return 0;
-                }
-
-                // Определение языка Go по секциям
-                if (strcmp(segname, "__TEXT") == 0 && (strcmp(sectname, "__rodata") == 0 ||
-                                                       strcmp(sectname, "__typelink") == 0 ||
-                                                       strcmp(sectname, "__itablink") == 0)) {
-                    strcpy(lang_info->language, "Go");
-                    strcpy(lang_info->compiler, "gc (Go compiler)");
-                    return 0;
-                }
-
-                // Определение языка Rust по секциям
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__rustc") == 0) {
-                    strcpy(lang_info->language, "Rust");
-                    strcpy(lang_info->compiler, "rustc");
-                    return 0;
-                }
-
-                // Определение языка Swift по секциям
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__swift5_proto") == 0) {
-                    strcpy(lang_info->language, "Swift");
-                    strcpy(lang_info->compiler, "Apple Swift Compiler");
-                    return 0;
-                }
-
-                // Определение языка Kotlin по секциям
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__kotlin") == 0) {
-                    strcpy(lang_info->language, "Kotlin/Native");
-                    strcpy(lang_info->compiler, "Kotlin Native Compiler");
-                    return 0;
-                }
-
-                // Определение языка Haskell по секциям
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__haskell_cr") == 0) {
-                    strcpy(lang_info->language, "Haskell");
-                    strcpy(lang_info->compiler, "GHC");
-                    return 0;
-                }
-
-                // Определение Erlang/Elixir по секциям
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__erlang_atom_tab") == 0) {
-                    strcpy(lang_info->language, "Erlang/Elixir");
-                    strcpy(lang_info->compiler, "Erlang VM");
-                    return 0;
-                }
-
-                // Определение языка Assembly по минимальному числу команд загрузки
-                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__text") == 0 && mach_o_file->command_count <= 5) {
+                if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__text") == 0 &&
+                    mach_o_file->command_count <= 5) {
                     strcpy(lang_info->language, "Assembly");
                     strcpy(lang_info->compiler, "Assembler");
                     return 0;
@@ -403,11 +515,14 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
             }
         }
 
-        // Переход к следующей команде загрузки
+        if (cmd->cmdsize == 0) {
+            fprintf(stderr, "Invalid cmdsize detected, preventing infinite loop\n");
+            return -1;
+        }
         cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
     }
 
-    return -1; // Если не удалось определить язык или компилятор по секциям
+    return -1;
 }
 
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
