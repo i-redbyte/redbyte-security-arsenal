@@ -5,50 +5,62 @@
 #include <stdio.h>
 
 typedef struct {
+    char detected_language_by_symbols[64];
+    char detected_compiler_by_symbols[64];
+    char detected_language_by_sections[64];
+    char detected_compiler_by_sections[64];
+    char detected_language_by_strings[64];
+    char detected_compiler_by_strings[64];
+    char final_language[64];
+    char final_compiler[64];
+} DetectionResults;
+
+
+typedef struct {
     const char *prefix;
     const char *language;
     const char *compiler;
 } SymbolMapping;
 
 static const SymbolMapping symbol_mappings[] = {
-        {"__Z", "C++", "Clang"},
-        {"_OBJC_", "Objective-C", "Clang"},
-        {"_$s", "Swift", "Apple Swift Compiler"},
-        {"_$LT", "Rust", "rustc"},
-        {"_main.", "Go", "gc (Go compiler)"},
-        {"_Java", "Java", "GraalVM Native Image"},
-        {"_JNI", "Java", "GraalVM Native Image"},
-        {"_kfun:", "Kotlin/Native", "Kotlin Native Compiler"},
-        {"PyInit_", "Python", "Cython or CPython"},
-        {"rb_", "Ruby", "Ruby Interpreter"},
-        {"_ghczm", "Haskell", "GHC"},
-        {"_erl_", "Erlang/Elixir", "Erlang VM"},
-        {"_elixir_", "Elixir", "Erlang VM"},
-        {"_start", "Assembly", "Assembler"},
-        {"_JS_", "JavaScript", "V8 or SpiderMonkey"},
-        {"_PHP_", "PHP", "Zend Engine"},
-        {"_perl_", "Perl", "Perl Interpreter"},
-        {"_node_", "Node.js", "V8"},
-        {"_v8_", "V8", "V8 Engine"},
-        {"_julia_", "Julia", "Julia Compiler"},
-        {"_matlab_", "MATLAB", "MATLAB Compiler"},
-        {"_fortran_", "Fortran", "GNU Fortran or Intel Fortran"},
-        {"_cobol_", "COBOL", "COBOL Compiler"},
-        {"_pascal_", "Pascal", "Free Pascal"},
-        {"_ada_", "Ada", "GNAT"},
-        {"_lisp_", "Lisp", "SBCL or CLISP"},
-        {"_clojure_", "Clojure", "Clojure Compiler"},
-        {"_scheme_", "Scheme", "MIT/GNU Scheme"},
-        {"_lua_", "Lua", "LuaJIT"},
-        {"_tcl_", "Tcl", "Tcl Interpreter"},
-        {"_r_", "R", "R Interpreter"},
-        {"_ocaml_", "OCaml", "OCaml Compiler"},
-        {"_scala_", "Scala", "Scala Compiler"},
-        {"_elm_", "Elm", "Elm Compiler"},
-        {"_dart_", "Dart", "Dart Compiler"},
-        {"_crystal_", "Crystal", "Crystal Compiler"},
-        {"_nim_", "Nim", "Nim Compiler"},
-        {"_zig_", "Zig", "Zig Compiler"}
+        {"__Z",       "C++",           "Clang"},
+        {"_OBJC_",    "Objective-C",   "Clang"},
+        {"_$s",       "Swift",         "Apple Swift Compiler"},
+        {"_$LT",      "Rust",          "rustc"},
+        {"_main.",    "Go",            "gc (Go compiler)"},
+        {"_Java",     "Java",          "GraalVM Native Image"},
+        {"_JNI",      "Java",          "GraalVM Native Image"},
+        {"_kfun:",    "Kotlin/Native", "Kotlin Native Compiler"},
+        {"PyInit_",   "Python",        "Cython or CPython"},
+        {"rb_",       "Ruby",          "Ruby Interpreter"},
+        {"_ghczm",    "Haskell",       "GHC"},
+        {"_erl_",     "Erlang/Elixir", "Erlang VM"},
+        {"_elixir_",  "Elixir",        "Erlang VM"},
+        {"_start",    "Assembly",      "Assembler"},
+        {"_JS_",      "JavaScript",    "V8 or SpiderMonkey"},
+        {"_PHP_",     "PHP",           "Zend Engine"},
+        {"_perl_",    "Perl",          "Perl Interpreter"},
+        {"_node_",    "Node.js",       "V8"},
+        {"_v8_",      "V8",            "V8 Engine"},
+        {"_julia_",   "Julia",         "Julia Compiler"},
+        {"_matlab_",  "MATLAB",        "MATLAB Compiler"},
+        {"_fortran_", "Fortran",       "GNU Fortran or Intel Fortran"},
+        {"_cobol_",   "COBOL",         "COBOL Compiler"},
+        {"_pascal_",  "Pascal",        "Free Pascal"},
+        {"_ada_",     "Ada",           "GNAT"},
+        {"_lisp_",    "Lisp",          "SBCL or CLISP"},
+        {"_clojure_", "Clojure",       "Clojure Compiler"},
+        {"_scheme_",  "Scheme",        "MIT/GNU Scheme"},
+        {"_lua_",     "Lua",           "LuaJIT"},
+        {"_tcl_",     "Tcl",           "Tcl Interpreter"},
+        {"_r_",       "R",             "R Interpreter"},
+        {"_ocaml_",   "OCaml",         "OCaml Compiler"},
+        {"_scala_",   "Scala",         "Scala Compiler"},
+        {"_elm_",     "Elm",           "Elm Compiler"},
+        {"_dart_",    "Dart",          "Dart Compiler"},
+        {"_crystal_", "Crystal",       "Crystal Compiler"},
+        {"_nim_",     "Nim",           "Nim Compiler"},
+        {"_zig_",     "Zig",           "Zig Compiler"}
 };
 
 /**
@@ -131,31 +143,46 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
  */
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
 
+
+static void combine_results(DetectionResults *results);
+
 int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
     if (!mach_o_file || !file || !lang_info) {
+        fprintf(stderr, "Invalid arguments to detect_language_and_compiler\n");
         return -1;
     }
 
-    memset(lang_info, 0, sizeof(LanguageInfo));
-    strcpy(lang_info->language, "Unknown");
-    strcpy(lang_info->compiler, "Unknown");
+    DetectionResults results = {0};
+    strcpy(results.detected_language_by_symbols, "Unknown");
+    strcpy(results.detected_compiler_by_symbols, "Unknown");
+    strcpy(results.detected_language_by_sections, "Unknown");
+    strcpy(results.detected_compiler_by_sections, "Unknown");
+    strcpy(results.detected_language_by_strings, "Unknown");
+    strcpy(results.detected_compiler_by_strings, "Unknown");
+    strcpy(results.final_language, "Unknown");
+    strcpy(results.final_compiler, "Unknown");
 
-    if (analyze_symbols(mach_o_file, file, lang_info) == 0) {
-        return 0;
+    LanguageInfo temp_lang_info = {0};
+
+    if (analyze_symbols(mach_o_file, file, &temp_lang_info) == 0) {
+        strcpy(results.detected_language_by_symbols, temp_lang_info.language);
+        strcpy(results.detected_compiler_by_symbols, temp_lang_info.compiler);
     }
 
-    if (analyze_sections(mach_o_file, file, lang_info) == 0) {
-        return 0;
+    if (analyze_sections(mach_o_file, file, &temp_lang_info) == 0) {
+        strcpy(results.detected_language_by_sections, temp_lang_info.language);
+        strcpy(results.detected_compiler_by_sections, temp_lang_info.compiler);
     }
 
-    if (analyze_strings(mach_o_file, file, lang_info) == 0) {
-        return 0;
+    if (analyze_strings(mach_o_file, file, &temp_lang_info) == 0) {
+        strcpy(results.detected_language_by_strings, temp_lang_info.language);
+        strcpy(results.detected_compiler_by_strings, temp_lang_info.compiler);
     }
 
-    if (strcmp(lang_info->language, "Unknown") == 0) {
-        strcpy(lang_info->language, "Assembly");
-        strcpy(lang_info->compiler, "Assembler");
-    }
+    combine_results(&results);
+
+    strcpy(lang_info->language, results.final_language);
+    strcpy(lang_info->compiler, results.final_compiler);
 
     return 0;
 }
@@ -292,8 +319,7 @@ static int analyze_sections(const MachOFile *mach_o_file, FILE *file, LanguageIn
                 struct segment_command *seg_cmd = (struct segment_command *) cmd;
                 nsects = seg_cmd->nsects;
                 sections = (struct section *) (seg_cmd + 1);
-            }
-            else {
+            } else {
                 struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
                 nsects = seg_cmd->nsects;
                 sections = (struct section *) (seg_cmd + 1);
@@ -464,4 +490,45 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
     fseek(file, current_offset, SEEK_SET);
     return -1;
+}
+
+static void combine_results(DetectionResults *results) {
+    if (!results) {
+        fprintf(stderr, "Invalid arguments to combine_results\n");
+        return;
+    }
+
+    if (strcmp(results->detected_language_by_symbols, results->detected_language_by_sections) == 0 &&
+        strcmp(results->detected_language_by_sections, results->detected_language_by_strings) == 0 &&
+        strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_symbols);
+        strcpy(results->final_compiler, results->detected_compiler_by_symbols);
+    } else if (strcmp(results->detected_language_by_symbols, results->detected_language_by_sections) == 0 &&
+               strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_symbols);
+        strcpy(results->final_compiler, results->detected_compiler_by_symbols);
+        fprintf(stderr, "Warning: String analysis does not match symbol and section analysis.\n");
+    } else if (strcmp(results->detected_language_by_symbols, results->detected_language_by_strings) == 0 &&
+               strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_symbols);
+        strcpy(results->final_compiler, results->detected_compiler_by_symbols);
+        fprintf(stderr, "Warning: Section analysis does not match symbol and string analysis.\n");
+    } else if (strcmp(results->detected_language_by_sections, results->detected_language_by_strings) == 0 &&
+               strcmp(results->detected_language_by_sections, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_sections);
+        strcpy(results->final_compiler, results->detected_compiler_by_sections);
+        fprintf(stderr, "Warning: Symbol analysis does not match section and string analysis.\n");
+    } else if (strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_symbols);
+        strcpy(results->final_compiler, results->detected_compiler_by_symbols);
+    } else if (strcmp(results->detected_language_by_sections, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_sections);
+        strcpy(results->final_compiler, results->detected_compiler_by_sections);
+    } else if (strcmp(results->detected_language_by_strings, "Unknown") != 0) {
+        strcpy(results->final_language, results->detected_language_by_strings);
+        strcpy(results->final_compiler, results->detected_compiler_by_strings);
+    } else {
+        strcpy(results->final_language, "Unknown");
+        strcpy(results->final_compiler, "Unknown");
+    }
 }
