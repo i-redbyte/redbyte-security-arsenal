@@ -13,126 +13,126 @@ typedef struct {
 
 static const SectionMapping section_mappings[] = {
         // C и компиляторы
-        {"__TEXT", "__cstring", "C", "Clang"},
-        {"__DATA", "__data", "C", "Clang"},
-        {"__TEXT", "__unwind_info", "C", "Clang"},
-        {"__DATA", "__data", "C", "GCC"},
+        {"__TEXT", "__cstring",               "C",             "Clang"},
+        {"__DATA", "__data",                  "C",             "Clang"},
+        {"__TEXT", "__unwind_info",           "C",             "Clang"},
+        {"__DATA", "__data",                  "C",             "GCC"},
 
         // C++
-        {"__TEXT", ".gcc_except_table", "C++", "GCC"},
-        {"__TEXT", "__const", "C++", "Clang"},
-        {"__TEXT", "__cstring", "C++", "Clang"},
-        {"__DATA", "__const", "C++", "Clang"},
-        {"__TEXT", "__ZTI", "C++", "Clang"}, // RTTI info
-        {"__TEXT", "__static_init", "C++", "Clang"},
+        {"__TEXT", ".gcc_except_table",       "C++",           "GCC"},
+        {"__TEXT", "__const",                 "C++",           "Clang"},
+        {"__TEXT", "__cstring",               "C++",           "Clang"},
+        {"__DATA", "__const",                 "C++",           "Clang"},
+        {"__TEXT", "__ZTI",                   "C++",           "Clang"}, // RTTI info
+        {"__TEXT", "__static_init",           "C++",           "Clang"},
 
         // Objective-C
-        {"__DATA", "__objc_classlist", "Objective-C", "Clang"},
-        {"__DATA", "__objc_selrefs", "Objective-C", "Clang"},
-        {"__TEXT", "__objc_methname", "Objective-C", "Clang"},
-        {"__TEXT", "__objc_const", "Objective-C", "Clang"},
-        {"__TEXT", "__objc_classname", "Objective-C", "Clang"},
-        {"__DATA", "__objc_const", "Objective-C", "Clang"},
+        {"__DATA", "__objc_classlist",        "Objective-C",   "Clang"},
+        {"__DATA", "__objc_selrefs",          "Objective-C",   "Clang"},
+        {"__TEXT", "__objc_methname",         "Objective-C",   "Clang"},
+        {"__TEXT", "__objc_const",            "Objective-C",   "Clang"},
+        {"__TEXT", "__objc_classname",        "Objective-C",   "Clang"},
+        {"__DATA", "__objc_const",            "Objective-C",   "Clang"},
 
         // Swift
-        {"__TEXT", "__swift5_proto", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_types", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_fieldmd", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_assocty", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_replace", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_builtin", "Swift", "Apple Swift Compiler"},
-        {"__TEXT", "__swift5_capture", "Swift", "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_proto",          "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_types",          "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_fieldmd",        "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_assocty",        "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_replace",        "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_builtin",        "Swift",         "Apple Swift Compiler"},
+        {"__TEXT", "__swift5_capture",        "Swift",         "Apple Swift Compiler"},
 
         // Go
-        {"__TEXT", "__rodata", "Go", "gc (Go compiler)"},
-        {"__TEXT", "__typelink", "Go", "gc (Go compiler)"},
-        {"__TEXT", "__itablink", "Go", "gc (Go compiler)"},
-        {"__DATA", "__go_buildinfo", "Go", "gc (Go compiler)"},
-        {"__TEXT", "__gosymtab", "Go", "gc (Go compiler)"},
-        {"__TEXT", "__gopclntab", "Go", "gc (Go compiler)"},
+        {"__TEXT", "__rodata",                "Go",            "gc (Go compiler)"},
+        {"__TEXT", "__typelink",              "Go",            "gc (Go compiler)"},
+        {"__TEXT", "__itablink",              "Go",            "gc (Go compiler)"},
+        {"__DATA", "__go_buildinfo",          "Go",            "gc (Go compiler)"},
+        {"__TEXT", "__gosymtab",              "Go",            "gc (Go compiler)"},
+        {"__TEXT", "__gopclntab",             "Go",            "gc (Go compiler)"},
 
         // Rust
-        {"__TEXT", "__rustc", "Rust", "rustc"},
-        {"__DATA", "__rust_extern_crate_map", "Rust", "rustc"},
-        {"__TEXT", "__llvm_prf_names", "Rust", "rustc"},
-        {"__DATA", "__llvm_prf_cnts", "Rust", "rustc"},
+        {"__TEXT", "__rustc",                 "Rust",          "rustc"},
+        {"__DATA", "__rust_extern_crate_map", "Rust",          "rustc"},
+        {"__TEXT", "__llvm_prf_names",        "Rust",          "rustc"},
+        {"__DATA", "__llvm_prf_cnts",         "Rust",          "rustc"},
 
         // Assembly
-        {"__TEXT", "__text", "Assembly", "Assembler"},
+        {"__TEXT", "__text",                  "Assembly",      "Assembler"},
 
         // Kotlin/Native
-        {"__TEXT", "__kotlin", "Kotlin/Native", "Kotlin Native Compiler"},
-        {"__DATA", "__kotlin_metadata", "Kotlin/Native", "Kotlin Native Compiler"},
+        {"__TEXT", "__kotlin",                "Kotlin/Native", "Kotlin Native Compiler"},
+        {"__DATA", "__kotlin_metadata",       "Kotlin/Native", "Kotlin Native Compiler"},
 
         // Haskell
-        {"__TEXT", "__stginit", "Haskell", "GHC"},
-        {"__TEXT", "__hs_info", "Haskell", "GHC"},
-        {"__DATA", "__hs_data", "Haskell", "GHC"},
-        {"__TEXT", "__hs_lct", "Haskell", "GHC"},
+        {"__TEXT", "__stginit",               "Haskell",       "GHC"},
+        {"__TEXT", "__hs_info",               "Haskell",       "GHC"},
+        {"__DATA", "__hs_data",               "Haskell",       "GHC"},
+        {"__TEXT", "__hs_lct",                "Haskell",       "GHC"},
 
         // Erlang/Elixir
-        {"__TEXT", "__erlang_atom_tab", "Erlang", "Erlang VM"},
-        {"__DATA", "__erlang_module_info", "Erlang", "Erlang VM"},
-        {"__TEXT", "__elixir_module_info", "Elixir", "Erlang VM"},
+        {"__TEXT", "__erlang_atom_tab",       "Erlang",        "Erlang VM"},
+        {"__DATA", "__erlang_module_info",    "Erlang",        "Erlang VM"},
+        {"__TEXT", "__elixir_module_info",    "Elixir",        "Erlang VM"},
 
         // Java (GraalVM Native Image)
-        {"__TEXT", "__graalvm", "Java", "GraalVM Native Image"},
-        {"__DATA", "__graalvm_data", "Java", "GraalVM Native Image"},
+        {"__TEXT", "__graalvm",               "Java",          "GraalVM Native Image"},
+        {"__DATA", "__graalvm_data",          "Java",          "GraalVM Native Image"},
 
         // LuaJIT
-        {"__TEXT", "__luajit_bc", "Lua", "LuaJIT Compiler"},
-        {"__TEXT", "__luajit", "Lua", "LuaJIT Compiler"},
-        {"__DATA", "__luajit_data", "Lua", "LuaJIT Compiler"},
+        {"__TEXT", "__luajit_bc",             "Lua",           "LuaJIT Compiler"},
+        {"__TEXT", "__luajit",                "Lua",           "LuaJIT Compiler"},
+        {"__DATA", "__luajit_data",           "Lua",           "LuaJIT Compiler"},
 
         // Ruby
-        {"__TEXT", "__ruby", "Ruby", "Ruby Interpreter"},
-        {"__DATA", "__ruby_symbols", "Ruby", "Ruby Interpreter"},
-        {"__TEXT", "__rb_funcall", "Ruby", "Ruby Interpreter"},
-        {"__DATA", "__rb_symbols", "Ruby", "Ruby Interpreter"},
+        {"__TEXT", "__ruby",                  "Ruby",          "Ruby Interpreter"},
+        {"__DATA", "__ruby_symbols",          "Ruby",          "Ruby Interpreter"},
+        {"__TEXT", "__rb_funcall",            "Ruby",          "Ruby Interpreter"},
+        {"__DATA", "__rb_symbols",            "Ruby",          "Ruby Interpreter"},
 
         // D
-        {"__TEXT", "__dmd_gc", "D", "DMD"},
-        {"__DATA", "__dmd_data", "D", "DMD"},
-        {"__TEXT", "__dmd_script", "D", "DMD"},
-        {"__DATA", "__dmd_tls", "D", "DMD"},
+        {"__TEXT", "__dmd_gc",                "D",             "DMD"},
+        {"__DATA", "__dmd_data",              "D",             "DMD"},
+        {"__TEXT", "__dmd_script",            "D",             "DMD"},
+        {"__DATA", "__dmd_tls",               "D",             "DMD"},
 
         // Nim
-        {"__TEXT", "__nimrod", "Nim", "Nim Compiler"},
-        {"__DATA", "__nimdata", "Nim", "Nim Compiler"},
-        {"__TEXT", "__nimrtl", "Nim", "Nim Compiler"},
-        {"__DATA", "__nimtls", "Nim", "Nim Compiler"},
+        {"__TEXT", "__nimrod",                "Nim",           "Nim Compiler"},
+        {"__DATA", "__nimdata",               "Nim",           "Nim Compiler"},
+        {"__TEXT", "__nimrtl",                "Nim",           "Nim Compiler"},
+        {"__DATA", "__nimtls",                "Nim",           "Nim Compiler"},
 
         // OCaml
-        {"__TEXT", "__caml_code", "OCaml", "OCaml Compiler"},
-        {"__DATA", "__caml_globals", "OCaml", "OCaml Compiler"},
+        {"__TEXT", "__caml_code",             "OCaml",         "OCaml Compiler"},
+        {"__DATA", "__caml_globals",          "OCaml",         "OCaml Compiler"},
 
         // Crystal
-        {"__TEXT", "__crystal", "Crystal", "Crystal Compiler"},
-        {"__DATA", "__crystal_data", "Crystal", "Crystal Compiler"},
-        {"__TEXT", "__crystal_init", "Crystal", "Crystal Compiler"},
-        {"__DATA", "__crystal_globals", "Crystal", "Crystal Compiler"},
+        {"__TEXT", "__crystal",               "Crystal",       "Crystal Compiler"},
+        {"__DATA", "__crystal_data",          "Crystal",       "Crystal Compiler"},
+        {"__TEXT", "__crystal_init",          "Crystal",       "Crystal Compiler"},
+        {"__DATA", "__crystal_globals",       "Crystal",       "Crystal Compiler"},
 
         // Zig
-        {"__TEXT", "__zig", "Zig", "Zig Compiler"},
-        {"__DATA", "__zig_data", "Zig", "Zig Compiler"},
-        {"__TEXT", "__zig_strings", "Zig", "Zig Compiler"},
-        {"__DATA", "__zig_globals", "Zig", "Zig Compiler"},
+        {"__TEXT", "__zig",                   "Zig",           "Zig Compiler"},
+        {"__DATA", "__zig_data",              "Zig",           "Zig Compiler"},
+        {"__TEXT", "__zig_strings",           "Zig",           "Zig Compiler"},
+        {"__DATA", "__zig_globals",           "Zig",           "Zig Compiler"},
 
         // Julia
-        {"__TEXT", "__julia", "Julia", "Julia Compiler"},
-        {"__DATA", "__julia_data", "Julia", "Julia Compiler"},
-        {"__TEXT", "__julia_fns", "Julia", "Julia Compiler"},
-        {"__DATA", "__julia_consts", "Julia", "Julia Compiler"},
+        {"__TEXT", "__julia",                 "Julia",         "Julia Compiler"},
+        {"__DATA", "__julia_data",            "Julia",         "Julia Compiler"},
+        {"__TEXT", "__julia_fns",             "Julia",         "Julia Compiler"},
+        {"__DATA", "__julia_consts",          "Julia",         "Julia Compiler"},
 
         // Lisp (SBCL)
-        {"__TEXT", "__sbcl_text", "Common Lisp", "SBCL"},
-        {"__DATA", "__sbcl_data", "Common Lisp", "SBCL"},
+        {"__TEXT", "__sbcl_text",             "Common Lisp",   "SBCL"},
+        {"__DATA", "__sbcl_data",             "Common Lisp",   "SBCL"},
 
         // Scala Native
-        {"__TEXT", "__scala_entry", "Scala", "Scala Native"},
-        {"__DATA", "__scala_data", "Scala", "Scala Native"},
-        {"__TEXT", "__scalanative_func", "Scala", "Scala Native"},
-        {"__DATA", "__scalanative_data", "Scala", "Scala Native"}
+        {"__TEXT", "__scala_entry",           "Scala",         "Scala Native"},
+        {"__DATA", "__scala_data",            "Scala",         "Scala Native"},
+        {"__TEXT", "__scalanative_func",      "Scala",         "Scala Native"},
+        {"__DATA", "__scalanative_data",      "Scala",         "Scala Native"}
 };
 
 typedef struct {
@@ -154,45 +154,106 @@ typedef struct {
 } SymbolMapping;
 
 static const SymbolMapping symbol_mappings[] = {
-        {"__Z",       "C++",           "Clang"},
-        {"_OBJC_",    "Objective-C",   "Clang"},
-        {"_$s",       "Swift",         "Apple Swift Compiler"},
-        {"_$LT",      "Rust",          "rustc"},
-        {"_main.",    "Go",            "gc (Go compiler)"},
-        {"_Java",     "Java",          "GraalVM Native Image"},
-        {"_JNI",      "Java",          "GraalVM Native Image"},
-        {"_kfun:",    "Kotlin/Native", "Kotlin Native Compiler"},
-        {"PyInit_",   "Python",        "Cython or CPython"},
-        {"rb_",       "Ruby",          "Ruby Interpreter"},
-        {"_ghczm",    "Haskell",       "GHC"},
-        {"_erl_",     "Erlang/Elixir", "Erlang VM"},
-        {"_elixir_",  "Elixir",        "Erlang VM"},
-        {"_start",    "Assembly",      "Assembler"},
-        {"_JS_",      "JavaScript",    "V8 or SpiderMonkey"},
-        {"_PHP_",     "PHP",           "Zend Engine"},
-        {"_perl_",    "Perl",          "Perl Interpreter"},
-        {"_node_",    "Node.js",       "V8"},
-        {"_v8_",      "V8",            "V8 Engine"},
-        {"_julia_",   "Julia",         "Julia Compiler"},
-        {"_matlab_",  "MATLAB",        "MATLAB Compiler"},
-        {"_fortran_", "Fortran",       "GNU Fortran or Intel Fortran"},
-        {"_cobol_",   "COBOL",         "COBOL Compiler"},
-        {"_pascal_",  "Pascal",        "Free Pascal"},
-        {"_ada_",     "Ada",           "GNAT"},
-        {"_lisp_",    "Lisp",          "SBCL or CLISP"},
-        {"_clojure_", "Clojure",       "Clojure Compiler"},
-        {"_scheme_",  "Scheme",        "MIT/GNU Scheme"},
-        {"_lua_",     "Lua",           "LuaJIT"},
-        {"_tcl_",     "Tcl",           "Tcl Interpreter"},
-        {"_r_",       "R",             "R Interpreter"},
-        {"_ocaml_",   "OCaml",         "OCaml Compiler"},
-        {"_scala_",   "Scala",         "Scala Compiler"},
-        {"_elm_",     "Elm",           "Elm Compiler"},
-        {"_dart_",    "Dart",          "Dart Compiler"},
-        {"_crystal_", "Crystal",       "Crystal Compiler"},
-        {"_nim_",     "Nim",           "Nim Compiler"},
-        {"_zig_",     "Zig",           "Zig Compiler"}
+        // C++
+        {"_Z",         "C++",           "GCC or Clang"},
+        {"_ZN",        "C++",           "GCC or Clang"},
+        {"_ZSt",       "C++",           "Standard C++ Library"},
+        {"_ZT",        "C++",           "GCC or Clang"}, // RTTI информация
+
+        // Objective-C
+        {"_OBJC_",     "Objective-C",   "Clang"},
+        {"_objc_",     "Objective-C",   "Clang"},
+
+        // Swift
+        {"_$s",        "Swift",         "Apple Swift Compiler"},
+
+        // Rust
+        {"_R",         "Rust",          "rustc"},
+
+        // Go
+        {"_main.",     "Go",            "gc (Go compiler)"},
+        {"_runtime.",  "Go",            "gc (Go compiler)"},
+
+        // Java (JNI)
+        {"Java_",      "Java",          "JNI"},
+
+        // Kotlin/Native
+        {"kfun:",      "Kotlin/Native", "Kotlin Native Compiler"},
+
+        // Python
+        {"PyInit_",    "Python",        "Cython or CPython"},
+        {"Py",         "Python",        "CPython"},
+
+        // Ruby
+        {"rb_",        "Ruby",          "Ruby Interpreter"},
+
+        // Haskell
+        {"_ghczm",     "Haskell",       "GHC"},
+
+        // Erlang
+        {"erl_",       "Erlang",        "Erlang VM"},
+
+        // Elixir
+        {"Elixir.",    "Elixir",        "Elixir Compiler"},
+
+        // Perl
+        {"Perl_",      "Perl",          "Perl Interpreter"},
+
+        // Lua
+        {"lua_",       "Lua",           "Lua Interpreter or LuaJIT"},
+
+        // R
+        {"Rf_",        "R",             "R Interpreter"},
+        {"R_",         "R",             "R Interpreter"},
+
+        // OCaml
+        {"caml",       "OCaml",         "OCaml Compiler"},
+
+        // D
+        {"_D",         "D",             "DMD or LDC"},
+
+        // Julia
+        {"jl_",        "Julia",         "Julia Compiler"},
+
+        // Fortran
+        {"_gfortran",  "Fortran",       "GNU Fortran"},
+        {"_fortran",   "Fortran",       "Intel Fortran"},
+
+        // Pascal
+        {"FPC_",       "Pascal",        "Free Pascal Compiler"},
+
+        // Ada
+        {"__ada_",     "Ada",           "GNAT"},
+
+        // Crystal
+        {"__crystal_", "Crystal",       "Crystal Compiler"},
+
+        // Nim
+        {"nim",        "Nim",           "Nim Compiler"},
+
+        // Zig
+        {"zig_",       "Zig",           "Zig Compiler"},
+
+        // Dart
+        {"Dart_",      "Dart",          "Dart Compiler"},
+
+        // Common Lisp
+        {"cl_",        "Common Lisp",   "SBCL or CLISP"},
+
+        // Scala
+        {"_Z7scala",   "Scala",         "Scala Native"},
+
+        // Tcl
+        {"Tcl_",       "Tcl",           "Tcl Interpreter"},
+
+        // Assembly
+        {"_start",     "Assembly",      "Assembler"}, // Вниз для предотвращения ложных срабатываний
+
+        // Дополнительные ассемблеры
+        {"nasm_",      "Assembly",      "NASM"},
+        {"fasm_",      "Assembly",      "FASM"}
 };
+
 
 /**
  * @brief Анализирует символы в Mach-O файле для определения языка и компилятора.
