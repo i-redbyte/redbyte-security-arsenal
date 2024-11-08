@@ -5,6 +5,9 @@
 #define INITIAL_TABLE_SIZE 256
 #define LOAD_FACTOR_THRESHOLD 0.75
 
+/**
+ * Хеш-функция, использующая алгоритм djb2.
+ */
 static unsigned int hash(const char *key) {
     unsigned int hash = 5381;
     int c;
@@ -16,19 +19,22 @@ static unsigned int hash(const char *key) {
 
 HashTable *hash_table_create(void) {
     HashTable *table = malloc(sizeof(HashTable));
-    if (table) {
-        table->size = INITIAL_TABLE_SIZE;
-        table->count = 0;
-        table->buckets = calloc(table->size, sizeof(HashNode *));
-        if (!table->buckets) {
-            free(table);
-            return NULL;
-        }
+    if (!table) {
+        return NULL;
+    }
+    table->size = INITIAL_TABLE_SIZE;
+    table->count = 0;
+    table->buckets = calloc(table->size, sizeof(HashNode *));
+    if (!table->buckets) {
+        free(table);
+        return NULL;
     }
     return table;
 }
 
 void hash_table_destroy(HashTable *table, void (*free_value)(void *)) {
+    if (!table) return;
+
     for (size_t i = 0; i < table->size; i++) {
         HashNode *node = table->buckets[i];
         while (node) {
@@ -46,11 +52,22 @@ void hash_table_destroy(HashTable *table, void (*free_value)(void *)) {
 }
 
 bool hash_table_insert(HashTable *table, const char *key, void *value) {
+    if (!table || !key) return false;
+
     if ((double)table->count / (double)table->size > LOAD_FACTOR_THRESHOLD) {
         hash_table_resize(table);
     }
 
     unsigned int index = hash(key) % table->size;
+    HashNode *current = table->buckets[index];
+    while (current) {
+        if (strcmp(current->key, key) == 0) {
+            current->value = value;
+            return true;
+        }
+        current = current->next;
+    }
+
     HashNode *new_node = malloc(sizeof(HashNode));
     if (!new_node) {
         return false;
@@ -67,7 +84,9 @@ bool hash_table_insert(HashTable *table, const char *key, void *value) {
     return true;
 }
 
-bool hash_table_contains(HashTable *table, const char *key) {
+bool hash_table_contains(const HashTable *table, const char *key) {
+    if (!table || !key) return false;
+
     unsigned int index = hash(key) % table->size;
     HashNode *node = table->buckets[index];
     while (node) {
@@ -79,7 +98,9 @@ bool hash_table_contains(HashTable *table, const char *key) {
     return false;
 }
 
-void *hash_table_get(HashTable *table, const char *key) {
+void *hash_table_get(const HashTable *table, const char *key) {
+    if (!table || !key) return NULL;
+
     unsigned int index = hash(key) % table->size;
     HashNode *node = table->buckets[index];
     while (node) {
@@ -92,6 +113,8 @@ void *hash_table_get(HashTable *table, const char *key) {
 }
 
 void hash_table_resize(HashTable *table) {
+    if (!table) return;
+
     size_t new_size = table->size * 2;
     HashNode **new_buckets = calloc(new_size, sizeof(HashNode *));
     if (!new_buckets) {
