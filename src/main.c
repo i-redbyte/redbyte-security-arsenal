@@ -32,7 +32,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const char *lang = russian_language ? "ru" : "en";
+    Language lang = russian_language ? LANG_RU : LANG_EN;
+    initialize_lc_command_table();
 
     if (list_lc_commands) {
         print_all_lc_commands(lang);
