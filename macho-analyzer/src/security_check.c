@@ -118,10 +118,76 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
 }
 
 /**
- * Основная функция для проверки всех защитных механизмов.
+ * Функция для проверки наличия sandbox и entitlements в Mach-O файле.
+ * Она ищет LC_CODE_SIGNATURE и LC_LOAD_DYLIB команды, которые могут указывать на использование песочницы.
+ * Также проверяет наличие LC_SEGMENT и LC_SEGMENT_64 команд с секцией __TEXT,__entitlements.
  *
- * @param mach_o_file Указатель на структуру MachOFile.
+ * @param mach_o_file Структура MachOFile для хранения информации о файле.
  */
+void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
+    if (!mach_o_file || !mach_o_file->commands) {
+        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        return;
+    }
+
+    struct load_command *cmd = mach_o_file->commands;
+    uint32_t ncmds = mach_o_file->command_count;
+    int sandbox_found = 0;
+    int entitlements_found = 0;
+
+    // Итерируемся по командам загрузки для анализа наличия песочницы и entitlements
+    for (uint32_t i = 0; i < ncmds; i++) {
+        switch (cmd->cmd) {
+            case LC_LOAD_DYLIB: {
+                struct dylib_command *dylib_cmd = (struct dylib_command *)cmd;
+                char *dylib_name = (char *)cmd + dylib_cmd->dylib.name.offset;
+
+                // Если в списке библиотек упоминается песочница
+                if (strstr(dylib_name, "sandbox")) {
+                    sandbox_found = 1;
+                    printf("Sandbox detected: %s\n", dylib_name);
+                }
+                break;
+            }
+            case LC_SEGMENT: {
+                struct segment_command *seg_cmd = (struct segment_command *)cmd;
+                if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
+                    struct section *sections = (struct section *)(seg_cmd + 1);
+                    for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
+                        if (strcmp(sections[j].sectname, "__entitlements") == 0) {
+                            entitlements_found = 1;
+                            printf("Entitlements detected in section: %s\n", sections[j].sectname);
+                        }
+                    }
+                }
+                break;
+            }
+            case LC_SEGMENT_64: {
+                struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
+                if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
+                    struct section_64 *sections = (struct section_64 *)(seg_cmd + 1);
+                    for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
+                        if (strcmp(sections[j].sectname, "__entitlements") == 0) {
+                            entitlements_found = 1;
+                            printf("Entitlements detected in section: %s\n", sections[j].sectname);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
+    if (!sandbox_found) {
+        printf("No Sandbox detected in this Mach-O file.\n");
+    }
+
+    if (!entitlements_found) {
+        printf("No Entitlements detected in this Mach-O file.\n");
+    }
+}
+
 void check_security_features(const MachOFile *mach_o_file, FILE *file) {
     if (!mach_o_file) {
         printf("Invalid Mach-O file.\n");
@@ -150,4 +216,7 @@ void check_security_features(const MachOFile *mach_o_file, FILE *file) {
     } else {
         printf("  Stack Canaries: Not supported\n");
     }
+
+    // Проверка Sandbox и Entitlements
+    check_sandbox_and_entitlements(mach_o_file);
 }
