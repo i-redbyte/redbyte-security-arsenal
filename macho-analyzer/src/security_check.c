@@ -135,14 +135,11 @@ void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
     int sandbox_found = 0;
     int entitlements_found = 0;
 
-    // Итерируемся по командам загрузки для анализа наличия песочницы и entitlements
     for (uint32_t i = 0; i < ncmds; i++) {
         switch (cmd->cmd) {
             case LC_LOAD_DYLIB: {
-                struct dylib_command *dylib_cmd = (struct dylib_command *)cmd;
-                char *dylib_name = (char *)cmd + dylib_cmd->dylib.name.offset;
-
-                // Если в списке библиотек упоминается песочница
+                struct dylib_command *dylib_cmd = (struct dylib_command *) cmd;
+                char *dylib_name = (char *) cmd + dylib_cmd->dylib.name.offset;
                 if (strstr(dylib_name, "sandbox")) {
                     sandbox_found = 1;
                     printf("Sandbox detected: %s\n", dylib_name);
@@ -150,9 +147,9 @@ void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
                 break;
             }
             case LC_SEGMENT: {
-                struct segment_command *seg_cmd = (struct segment_command *)cmd;
+                struct segment_command *seg_cmd = (struct segment_command *) cmd;
                 if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
-                    struct section *sections = (struct section *)(seg_cmd + 1);
+                    struct section *sections = (struct section *) (seg_cmd + 1);
                     for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
                         if (strcmp(sections[j].sectname, "__entitlements") == 0) {
                             entitlements_found = 1;
@@ -163,9 +160,9 @@ void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
                 break;
             }
             case LC_SEGMENT_64: {
-                struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
+                struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
                 if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
-                    struct section_64 *sections = (struct section_64 *)(seg_cmd + 1);
+                    struct section_64 *sections = (struct section_64 *) (seg_cmd + 1);
                     for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
                         if (strcmp(sections[j].sectname, "__entitlements") == 0) {
                             entitlements_found = 1;
@@ -176,7 +173,7 @@ void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
                 break;
             }
         }
-        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
     }
 
     if (!sandbox_found) {
@@ -188,6 +185,33 @@ void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
     }
 }
 
+/**
+ * Функция для проверки наличия Bitcode в Mach-O файле.
+ * Bitcode используется для обеспечения совместимости с различными архитектурами.
+ * Проверяет наличие LC_DATA_IN_CODE команд.
+ *
+ * @param mach_o_file Структура MachOFile для хранения информации о файле.
+ * @return true, если Bitcode найден, иначе false.
+ */
+bool check_bitcode_presence(const MachOFile *mach_o_file) {
+    if (!mach_o_file || !mach_o_file->commands) {
+        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        return false;
+    }
+
+    struct load_command *cmd = mach_o_file->commands;
+    uint32_t ncmds = mach_o_file->command_count;
+
+    for (uint32_t i = 0; i < ncmds; i++) {
+        if (cmd->cmd == LC_DATA_IN_CODE) {
+            return true;
+        }
+        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+    }
+    return false;
+}
+
+//TODO: return check struct data
 void check_security_features(const MachOFile *mach_o_file, FILE *file) {
     if (!mach_o_file) {
         printf("Invalid Mach-O file.\n");
@@ -219,4 +243,11 @@ void check_security_features(const MachOFile *mach_o_file, FILE *file) {
 
     // Проверка Sandbox и Entitlements
     check_sandbox_and_entitlements(mach_o_file);
+
+    // Проверка наличия Bitcode
+    if (check_bitcode_presence(mach_o_file)) {
+        printf("Bitcode detected in this Mach-O file.\n");
+    } else {
+        printf("No Bitcode detected in this Mach-O file.\n");
+    }
 }
