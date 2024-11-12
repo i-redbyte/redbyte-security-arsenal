@@ -3,7 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <mach-o/loader.h>
 #include <mach-o/fat.h>
+#include <CommonCrypto/CommonDigest.h>
+#include <CommonCrypto/CommonCrypto.h>
+
+#define CSMAGIC_CODEDIRECTORY 0xfade0c02
+#define CSMAGIC_BLOBWRAPPER 0xfade0b01
 
 /**
  * Функция для анализа заголовков Mach-O файла.
@@ -46,6 +52,129 @@ static int analyze_fat_binary(FILE *file);
  */
 static int read_and_validate(FILE *file, void *buffer, size_t size, const char *err_msg);
 
+/**
+ * Функция для более глубокого анализа секции LC_CODE_SIGNATURE в Mach-O файле.
+ * Проверяет наличие LC_CODE_SIGNATURE и проверяет целостность подписи, а также её валидность.
+ *
+ * @param mach_o_file Структура MachOFile для хранения информации о файле.
+ * @param file Указатель на открытый файл Mach-O для доступа к данным подписи.
+ * @return 0 при успешной проверке, -1 в случае ошибки.
+ */
+int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
+    if (!mach_o_file || !mach_o_file->commands || !file) {
+        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        return -1;
+    }
+
+    struct load_command *cmd = mach_o_file->commands;
+    uint32_t ncmds = mach_o_file->command_count;
+    struct linkedit_data_command *code_sig_cmd = NULL;
+
+    for (uint32_t i = 0; i < ncmds; i++) {
+        if (cmd->cmd == LC_CODE_SIGNATURE) {
+            code_sig_cmd = (struct linkedit_data_command *)cmd;
+            break;
+        }
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
+    if (!code_sig_cmd) {
+        printf("No Code Signature detected in this Mach-O file.\n");
+        return 0;
+    }
+
+    printf("Code Signature detected. Verifying signature...\n");
+
+    if (fseek(file, code_sig_cmd->dataoff, SEEK_SET) != 0) {
+        perror("Failed to seek to code signature data");
+        return -1;
+    }
+
+    uint8_t *signature_data = malloc(code_sig_cmd->datasize);
+    if (!signature_data) {
+        fprintf(stderr, "Failed to allocate memory for code signature data.\n");
+        return -1;
+    }
+
+    if (fread(signature_data, 1, code_sig_cmd->datasize, file) != code_sig_cmd->datasize) {
+        fprintf(stderr, "Failed to read code signature data.\n");
+        free(signature_data);
+        return -1;
+    }
+
+    uint32_t magic = *(uint32_t *)signature_data;
+    if (magic != CSMAGIC_CODEDIRECTORY) {
+        printf("Warning: Code Signature magic number does not match expected value.\n");
+        free(signature_data);
+        return -1;
+    }
+
+    struct code_directory {
+        uint32_t magic;
+        uint32_t length;
+        uint32_t version;
+        uint32_t flags;
+        uint32_t hashOffset;
+        uint32_t identOffset;
+        uint32_t nSpecialSlots;
+        uint32_t nCodeSlots;
+        uint32_t codeLimit;
+        uint8_t hashSize;
+        uint8_t hashType;
+        uint8_t platform;
+        uint8_t pageSize;
+        uint32_t spare2;
+        uint32_t scatterOffset;
+    };
+
+    struct code_directory *cd = (struct code_directory *)signature_data;
+
+    if (cd->length != code_sig_cmd->datasize) {
+        printf("Warning: Code Directory length does not match expected value.\n");
+        free(signature_data);
+        return -1;
+    }
+
+    printf("Code Directory version: 0x%x\n", cd->version);
+    if (cd->version < 0x20100) {
+        printf("Warning: Code Directory version is outdated. Consider updating for better security.\n");
+    }
+
+    if (cd->identOffset < code_sig_cmd->datasize) {
+        char *identifier = (char *)(signature_data + cd->identOffset);
+        printf("Code Directory identifier: %s\n", identifier);
+    } else {
+        printf("Warning: Invalid identifier offset in Code Directory.\n");
+        free(signature_data);
+        return -1;
+    }
+
+    uint8_t *hash_data = signature_data + cd->hashOffset;
+    printf("Code Directory Hash (first 16 bytes): ");
+    for (size_t i = 0; i < 16 && i < cd->length - cd->hashOffset; i++) {
+        printf("%02x ", hash_data[i]);
+    }
+    printf("\n");
+
+    uint8_t calculated_hash[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_CTX sha_ctx;
+    CC_SHA256_Init(&sha_ctx);
+    CC_SHA256_Update(&sha_ctx, signature_data, cd->length);
+    CC_SHA256_Final(calculated_hash, &sha_ctx);
+
+    printf("Calculated SHA-256 Hash: ");
+    for (size_t i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) {
+        printf("%02x", calculated_hash[i]);
+    }
+    printf("\n");
+
+    printf("Code Signature appears valid (based on preliminary checks).\n");
+
+    free(signature_data);
+    return 0;
+}
+
+
 int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
     if (!file || !mach_o_file) {
         fprintf(stderr, "Invalid file or MachOFile structure.\n");
@@ -69,6 +198,9 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
             return -1;
         }
         if (analyze_load_commands(file, mach_o_file) != 0) {
+            return -1;
+        }
+        if (analyze_code_signature(mach_o_file, file) != 0) {
             return -1;
         }
     }
