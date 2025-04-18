@@ -7,6 +7,7 @@
 #include <mach-o/fat.h>
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonCrypto.h>
+#include <macho_printer.h>
 
 #define CSMAGIC_CODEDIRECTORY 0xfade0c02
 #define CSMAGIC_BLOBWRAPPER 0xfade0b01
@@ -29,7 +30,7 @@ static int analyze_mach_header(FILE *file, MachOFile *mach_o_file);
  * @param mach_o_file Структура для хранения команд загрузки.
  * @return 0 при успешном выполнении, -1 в случае ошибки.
  */
-static int analyze_load_commands(FILE *file, MachOFile *mach_o_file);
+int analyze_load_commands(FILE *file, MachOFile *mach_o_file);
 
 /**
  * Функция для анализа заголовков Fat Binary.
@@ -38,7 +39,7 @@ static int analyze_load_commands(FILE *file, MachOFile *mach_o_file);
  * @param file Указатель на открытый файл Fat Binary.
  * @return 0 при успешном выполнении, -1 в случае ошибки.
  */
-static int analyze_fat_binary(FILE *file);
+int analyze_fat_binary(FILE *file);
 
 /**
  * Функция для чтения данных и проверки ошибок.
@@ -72,10 +73,10 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
 
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_CODE_SIGNATURE) {
-            code_sig_cmd = (struct linkedit_data_command *)cmd;
+            code_sig_cmd = (struct linkedit_data_command *) cmd;
             break;
         }
-        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
     }
 
     if (!code_sig_cmd) {
@@ -102,7 +103,7 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
         return -1;
     }
 
-    uint32_t magic = *(uint32_t *)signature_data;
+    uint32_t magic = *(uint32_t *) signature_data;
     if (magic != CSMAGIC_CODEDIRECTORY) {
         printf("Warning: Code Signature magic number does not match expected value.\n");
         free(signature_data);
@@ -127,7 +128,7 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
         uint32_t scatterOffset;
     };
 
-    struct code_directory *cd = (struct code_directory *)signature_data;
+    struct code_directory *cd = (struct code_directory *) signature_data;
 
     if (cd->length != code_sig_cmd->datasize) {
         printf("Warning: Code Directory length does not match expected value.\n");
@@ -141,7 +142,7 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
     }
 
     if (cd->identOffset < code_sig_cmd->datasize) {
-        char *identifier = (char *)(signature_data + cd->identOffset);
+        char *identifier = (char *) (signature_data + cd->identOffset);
         printf("Code Directory identifier: %s\n", identifier);
     } else {
         printf("Warning: Invalid identifier offset in Code Directory.\n");
@@ -176,66 +177,141 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
 
 
 int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
-    if (!file || !mach_o_file) {
-        fprintf(stderr, "Invalid file or MachOFile structure.\n");
+    if (!file || !mach_o_file) return -1;
+
+    uint32_t magic = 0;
+    if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
+        fprintf(stderr, "Failed to read Mach-O magic\n");
         return -1;
     }
 
-    memset(mach_o_file, 0, sizeof(MachOFile));
-    uint32_t magic;
-    if (read_and_validate(file, &magic, sizeof(uint32_t), "Failed to read magic number") != 0) {
-        return -1;
-    }
-    fseek(file, 0, SEEK_SET); // Возвращаемся в начало файла
+    rewind(file);  // Вернуться к началу для повторного чтения структур
 
-    // Проверяем на Fat Binary
-    if (magic == FAT_CIGAM || magic == FAT_MAGIC) {
-        if (analyze_fat_binary(file) != 0) {
+    bool is_64_bit = false;
+    bool is_big_endian = false;
+
+    switch (magic) {
+        case MH_MAGIC:
+            is_64_bit = false;
+            is_big_endian = false;
+            break;
+        case MH_MAGIC_64:
+            is_64_bit = true;
+            is_big_endian = false;
+            break;
+        case MH_CIGAM:
+            is_64_bit = false;
+            is_big_endian = true;
+            break;
+        case MH_CIGAM_64:
+            is_64_bit = true;
+            is_big_endian = true;
+            break;
+        default:
+            fprintf(stderr, "Unsupported file format or invalid magic number: 0x%x\n", magic);
+            return -1;
+    }
+
+    mach_o_file->is_64_bit = is_64_bit;
+    mach_o_file->magic = magic;
+
+    if (is_64_bit) {
+        struct mach_header_64 header64;
+        if (fread(&header64, sizeof(struct mach_header_64), 1, file) != 1) {
+            fprintf(stderr, "Failed to read Mach-O 64-bit header\n");
             return -1;
         }
+
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header64.cputype) : header64.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header64.cpusubtype) : header64.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header64.filetype) : header64.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header64.flags) : header64.flags;
+
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header64.ncmds) : header64.ncmds;
+
     } else {
-        if (analyze_mach_header(file, mach_o_file) != 0) {
+        struct mach_header header;
+        if (fread(&header, sizeof(struct mach_header), 1, file) != 1) {
+            fprintf(stderr, "Failed to read Mach-O 32-bit header\n");
             return -1;
         }
-        if (analyze_load_commands(file, mach_o_file) != 0) {
-            return -1;
-        }
-        if (analyze_code_signature(mach_o_file, file) != 0) {
-            return -1;
-        }
+
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
+
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
+    }
+
+    // Установим позицию для чтения load commands
+    long lc_offset = is_64_bit ? sizeof(struct mach_header_64) : sizeof(struct mach_header);
+    if (fseek(file, lc_offset, SEEK_SET) != 0) {
+        fprintf(stderr, "Failed to seek to load commands\n");
+        return -1;
     }
 
     return 0;
 }
 
-static int analyze_fat_binary(FILE *file) {
+const char *get_arch_name(cpu_type_t cpu, cpu_subtype_t sub) {
+    bool is64 = (cpu & CPU_ARCH_ABI64) != 0;
+    cpu_type_t baseCpu = cpu & ~CPU_ARCH_ABI64;
+    switch (baseCpu) {
+        case CPU_TYPE_X86:
+            return is64 ? "x86_64" : "i386";
+        case CPU_TYPE_ARM:
+            return is64 ? "arm64" : "arm";
+        case CPU_TYPE_POWERPC:
+            return is64 ? "powerpc64" : "powerpc";
+        default:
+            return "unknown";
+    }
+}
+
+int analyze_fat_binary(FILE *file) {
     struct fat_header fatHeader;
-    if (read_and_validate(file, &fatHeader, sizeof(struct fat_header), "Failed to read fat header") != 0) {
+
+    if (fread(&fatHeader, sizeof(struct fat_header), 1, file) != 1) {
+        fprintf(stderr, "Failed to read fat header\n");
         return -1;
     }
 
     uint32_t nfat_arch = OSSwapBigToHostInt32(fatHeader.nfat_arch);
+
     struct fat_arch *fatArchs = calloc(nfat_arch, sizeof(struct fat_arch));
     if (!fatArchs) {
         fprintf(stderr, "Memory allocation failed for fat_arch.\n");
         return -1;
     }
 
-    if (read_and_validate(file, fatArchs, sizeof(struct fat_arch) * nfat_arch, "Failed to read fat_arch structures") != 0) {
-        free(fatArchs);
-        return -1;
+    for (uint32_t i = 0; i < nfat_arch; i++) {
+        if (fread(&fatArchs[i], sizeof(struct fat_arch), 1, file) != 1) {
+            fprintf(stderr, "Failed to read fat_arch %u\n", i);
+            free(fatArchs);
+            return -1;
+        }
     }
 
     printf("Fat Binary with %u architectures:\n\n", nfat_arch);
 
     for (uint32_t i = 0; i < nfat_arch; i++) {
+        cpu_type_t cpuType = OSSwapBigToHostInt32(fatArchs[i].cputype);
+        cpu_subtype_t cpuSubtype = OSSwapBigToHostInt32(fatArchs[i].cpusubtype);
         uint32_t offset = OSSwapBigToHostInt32(fatArchs[i].offset);
+        uint32_t size = OSSwapBigToHostInt32(fatArchs[i].size);
+
+        printf("---- Начинаем анализ архитектуры %u (%s) ----\n", i + 1, get_arch_name(cpuType, cpuSubtype));
+        printf("Offset = %u, Size = %u\n", offset, size);
+
         if (fseek(file, offset, SEEK_SET) != 0) {
-            fprintf(stderr, "Failed to seek to architecture %u.\n", i + 1);
+            fprintf(stderr, "Failed to seek to architecture %u (offset %u).\n", i + 1, offset);
             continue;
         }
 
         MachOFile arch_mach_o_file;
+        memset(&arch_mach_o_file, 0, sizeof(MachOFile)); // обнуляем, чтобы избежать мусора
+
         if (analyze_mach_header(file, &arch_mach_o_file) != 0) {
             fprintf(stderr, "Failed to analyze Mach-O header for architecture %u.\n", i + 1);
             continue;
@@ -246,6 +322,16 @@ static int analyze_fat_binary(FILE *file) {
             free_mach_o_file(&arch_mach_o_file);
             continue;
         }
+
+        if (analyze_code_signature(&arch_mach_o_file, file) != 0) {
+            fprintf(stderr, "Code signature verification failed for architecture %u.\n", i + 1);
+        }
+
+        const char *archName = get_arch_name(cpuType, cpuSubtype);
+        printf("Архитектура %u (%s):\n", i + 1, archName);
+
+        print_mach_o_info(&arch_mach_o_file, file);
+        printf("\n");
 
         free_mach_o_file(&arch_mach_o_file);
     }
@@ -282,7 +368,7 @@ static int analyze_mach_header(FILE *file, MachOFile *mach_o_file) {
     return 0;
 }
 
-static int analyze_load_commands(FILE *file, MachOFile *mach_o_file) {
+int analyze_load_commands(FILE *file, MachOFile *mach_o_file) {
     uint32_t ncmds, sizeofcmds;
     if (mach_o_file->is_64_bit) {
         ncmds = mach_o_file->header.header64.ncmds;
@@ -316,8 +402,34 @@ static int read_and_validate(FILE *file, void *buffer, size_t size, const char *
 }
 
 void free_mach_o_file(MachOFile *mach_o_file) {
-    if (mach_o_file && mach_o_file->commands) {
-        free(mach_o_file->commands);
-        mach_o_file->commands = NULL;
+    if (!mach_o_file) return;
+
+    if (mach_o_file->segments) {
+        for (int i = 0; i < mach_o_file->segment_count; i++) {
+            if (mach_o_file->segments[i].sections) {
+                free(mach_o_file->segments[i].sections);
+                mach_o_file->segments[i].sections = NULL;
+            }
+        }
+        free(mach_o_file->segments);
+        mach_o_file->segments = NULL;
     }
+
+    if (mach_o_file->load_commands) {
+        free(mach_o_file->load_commands);
+        mach_o_file->load_commands = NULL;
+    }
+
+    if (mach_o_file->linked_dylibs) {
+        for (int i = 0; i < mach_o_file->linked_dylib_count; i++) {
+            if (mach_o_file->linked_dylibs[i]) {
+                free(mach_o_file->linked_dylibs[i]);
+                mach_o_file->linked_dylibs[i] = NULL;
+            }
+        }
+        free(mach_o_file->linked_dylibs);
+        mach_o_file->linked_dylibs = NULL;
+    }
+
+    memset(mach_o_file, 0, sizeof(MachOFile));
 }
