@@ -13,7 +13,6 @@ include_directories(${CURSES_INCLUDE_DIR})
 
 set(SOURCES
         src/main.c
-        src/ui.c
         )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

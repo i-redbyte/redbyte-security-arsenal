@@ -146,7 +146,6 @@ typedef struct {
     char final_compiler[64];
 } DetectionResults;
 
-
 typedef struct {
     const char *prefix;
     const char *language;
@@ -254,105 +253,67 @@ static const SymbolMapping symbol_mappings[] = {
         {"fasm_",      "Assembly",      "FASM"}
 };
 
-
 /**
- * @brief Анализирует символы в Mach-O файле для определения языка и компилятора.
+ * Анализирует символы в Mach-O файле для определения языка и компилятора.
  *
- * Функция анализирует таблицу символов Mach-O файла, пытаясь распознать сигнатуры,
- * указывающие на используемый язык программирования и компилятор. Многие компиляторы и языки
- * создают специфичные символы (например, C++ использует mangled символы, Swift использует
- * префиксы _$s и т.д.), что позволяет точно определить их происхождение.
- *
- * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о командах загрузки
- *                    и секциях файла Mach-O.
- * @param file Указатель на открытый файл Mach-O для чтения таблицы символов и строк.
- *             Файл должен быть открыт на чтение.
- * @param lang_info Указатель на структуру LanguageInfo, в которую будет записана информация о языке
- *                  и компиляторе после анализа символов. Если символы указывают на конкретный язык
- *                  и компилятор, они будут записаны в соответствующие поля структуры.
- *
- * @return int Возвращает 0 при успешном определении языка и компилятора по символам, или -1, если
- *             символы не позволяют определить точный язык и компилятор.
- *
- * Примечания:
- * - Функция анализирует такие сигнатуры, как "_Z" для C++, "_OBJC_" для Objective-C, "_$s" для Swift и т.д.
- * - Если не удается определить язык или компилятор по символам, функция возвращает -1, и тогда
- *   другие методы анализа (например, анализ секций) могут быть использованы.
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на открытый файл Mach-O.
+ * @param lang_info Указатель на структуру LanguageInfo для записи результатов.
+ * @return 0 при успехе, -1 при ошибке.
  */
 static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
 
 /**
- * @brief Анализирует секции в Mach-O файле для определения языка и компилятора.
+ * Анализирует секции в Mach-O файле для определения языка и компилятора.
  *
- * Функция анализирует секции Mach-O файла, которые могут содержать специфичные данные для различных
- * языков программирования и компиляторов. Многие языки и компиляторы создают уникальные секции, такие как
- * `.gcc_except_table` для GCC, секции для Go, Swift, Rust и других языков, что позволяет определить язык
- * и компилятор.
- *
- * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о командах загрузки
- *                    и секциях файла Mach-O.
- * @param lang_info Указатель на структуру LanguageInfo, в которую будет записана информация о языке
- *                  и компиляторе после анализа секций. Если определен специфичный для компилятора
- *                  или языка сегмент или секция, данные будут сохранены в lang_info.
- *
- * @return int Возвращает 0 при успешном определении языка и компилятора по секциям, или -1, если
- *             секции не позволяют сделать точное определение.
- *
- * Примечания:
- * - Функция проверяет такие секции, как `.gcc_except_table` для GCC, `__swift5_proto` для Swift,
- *   `__rodata` и другие для Go, и т.д.
- * - Если не удается определить язык или компилятор по секциям, функция возвращает -1, и тогда
- *   можно использовать другие методы анализа.
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param lang_info Указатель на структуру LanguageInfo для записи результатов.
+ * @return 0 при успехе, -1 при ошибке.
  */
 static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_info);
 
 /**
- * @brief Анализирует строки данных в Mach-O файле для определения языка и компилятора.
+ * Анализирует строки данных в Mach-O файле для определения языка и компилятора.
  *
- * Функция анализирует строковые данные (например, константы) в секциях Mach-O файла,
- * которые могут содержать информацию о языке программирования или компиляторе. Многие компиляторы
- * и сборщики добавляют метаданные в виде строк, что может помочь определить, на каком языке
- * написана программа или какой компилятор использовался.
- *
- * @param mach_o_file Указатель на структуру MachOFile, содержащую информацию о командах загрузки
- *                    и секциях файла Mach-O.
- * @param file Указатель на открытый файл Mach-O для чтения строковых данных.
- *             Файл должен быть открыт на чтение.
- * @param lang_info Указатель на структуру LanguageInfo, в которую будет записана информация о языке
- *                  и компиляторе после анализа строк. Если найдены строки, специфичные для
- *                  определенного компилятора или языка, они будут записаны в lang_info.
- *
- * @return int Возвращает 0 при успешном определении языка и компилятора по строкам, или -1, если
- *             строки не содержат необходимой информации для точного определения.
- *
- * Примечания:
- * - Функция анализирует строковые данные, такие как строки Go build ID, Java JNI, строки,
- *   связанные с Python, и т.д.
- * - Если строки не позволяют определить язык или компилятор, функция возвращает -1,
- *   и тогда другие методы анализа могут быть использованы.
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на открытый файл Mach-O.
+ * @param lang_info Указатель на структуру LanguageInfo для записи результатов.
+ * @return 0 при успехе, -1 при ошибке.
  */
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info);
 
-
-static void combine_results(DetectionResults *results);
-
+/**
+ * Проверяет секцию на соответствие языку и компилятору.
+ *
+ * @param segname Имя сегмента.
+ * @param sectname Имя секции.
+ * @param lang_info Указатель на структуру LanguageInfo для записи результатов.
+ * @return 0 при совпадении, -1 если не найдено.
+ */
 static int check_section(const char *segname, const char *sectname, LanguageInfo *lang_info);
+
+/**
+ * Объединяет результаты анализа символов, секций и строк.
+ *
+ * @param results Указатель на структуру DetectionResults.
+ */
+static void combine_results(DetectionResults *results);
 
 int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
     if (!mach_o_file || !file || !lang_info) {
-        fprintf(stderr, "Invalid arguments to detect_language_and_compiler\n");
+        fprintf(stderr, "Ошибка: Неверные аргументы в detect_language_and_compiler\n");
         return -1;
     }
 
     DetectionResults results = {0};
-    strcpy(results.detected_language_by_symbols, "Unknown");
-    strcpy(results.detected_compiler_by_symbols, "Unknown");
-    strcpy(results.detected_language_by_sections, "Unknown");
-    strcpy(results.detected_compiler_by_sections, "Unknown");
-    strcpy(results.detected_language_by_strings, "Unknown");
-    strcpy(results.detected_compiler_by_strings, "Unknown");
-    strcpy(results.final_language, "Unknown");
-    strcpy(results.final_compiler, "Unknown");
+    strcpy(results.detected_language_by_symbols, "Неизвестно");
+    strcpy(results.detected_compiler_by_symbols, "Неизвестно");
+    strcpy(results.detected_language_by_sections, "Неизвестно");
+    strcpy(results.detected_compiler_by_sections, "Неизвестно");
+    strcpy(results.detected_language_by_strings, "Неизвестно");
+    strcpy(results.detected_compiler_by_strings, "Неизвестно");
+    strcpy(results.final_language, "Неизвестно");
+    strcpy(results.final_compiler, "Неизвестно");
 
     LanguageInfo temp_lang_info = {0};
 
@@ -380,17 +341,22 @@ int detect_language_and_compiler(const MachOFile *mach_o_file, FILE *file, Langu
 }
 
 static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
+    if (!mach_o_file || !file || !lang_info) {
+        fprintf(stderr, "Ошибка: Неверные аргументы в analyze_symbols\n");
+        return -1;
+    }
+
     struct symtab_command *symtab_cmd = NULL;
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: command_count -> load_command_count
 
     // Поиск команды LC_SYMTAB
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_SYMTAB) {
-            symtab_cmd = (struct symtab_command *) cmd;
+            symtab_cmd = (struct symtab_command *)cmd;
             break;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     if (!symtab_cmd || symtab_cmd->nsyms == 0) {
@@ -404,12 +370,14 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
     void *symbols = malloc(symbols_size);
     if (!symbols) {
+        fprintf(stderr, "Ошибка: Не удалось выделить память для символов\n");
         fseek(file, current_offset, SEEK_SET);
         return -1;
     }
 
     fseek(file, symtab_cmd->symoff, SEEK_SET);
     if (fread(symbols, symbol_size, symtab_cmd->nsyms, file) != symtab_cmd->nsyms) {
+        fprintf(stderr, "Ошибка: Не удалось прочитать символы\n");
         free(symbols);
         fseek(file, current_offset, SEEK_SET);
         return -1;
@@ -417,6 +385,7 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
     char *string_table = malloc(symtab_cmd->strsize);
     if (!string_table) {
+        fprintf(stderr, "Ошибка: Не удалось выделить память для таблицы строк\n");
         free(symbols);
         fseek(file, current_offset, SEEK_SET);
         return -1;
@@ -424,6 +393,7 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
     fseek(file, symtab_cmd->stroff, SEEK_SET);
     if (fread(string_table, 1, symtab_cmd->strsize, file) != symtab_cmd->strsize) {
+        fprintf(stderr, "Ошибка: Не удалось прочитать таблицу строк\n");
         free(symbols);
         free(string_table);
         fseek(file, current_offset, SEEK_SET);
@@ -433,12 +403,12 @@ static int analyze_symbols(const MachOFile *mach_o_file, FILE *file, LanguageInf
     for (uint32_t i = 0; i < symtab_cmd->nsyms; i++) {
         char *sym_name;
         if (mach_o_file->is_64_bit) {
-            struct nlist_64 *sym = &((struct nlist_64 *) symbols)[i];
+            struct nlist_64 *sym = &((struct nlist_64 *)symbols)[i];
             uint32_t strx = sym->n_un.n_strx;
             if (strx >= symtab_cmd->strsize) continue;
             sym_name = string_table + strx;
         } else {
-            struct nlist *sym = &((struct nlist *) symbols)[i];
+            struct nlist *sym = &((struct nlist *)symbols)[i];
             uint32_t strx = sym->n_un.n_strx;
             if (strx >= symtab_cmd->strsize) continue;
             sym_name = string_table + strx;
@@ -511,15 +481,20 @@ static int check_section(const char *segname, const char *sectname, LanguageInfo
 }
 
 static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_info) {
-    strcpy(lang_info->language, "Unknown");
-    strcpy(lang_info->compiler, "Unknown");
+    if (!mach_o_file || !lang_info) {
+        fprintf(stderr, "Ошибка: Неверные аргументы в analyze_sections\n");
+        return -1;
+    }
+
+    strcpy(lang_info->language, "Неизвестно");
+    strcpy(lang_info->compiler, "Неизвестно");
 
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: command_count -> load_command_count
 
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmdsize == 0) {
-            fprintf(stderr, "Invalid command size in load command\n");
+            fprintf(stderr, "Ошибка: Неверный размер команды загрузки\n");
             return -1;
         }
 
@@ -528,18 +503,18 @@ static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_inf
             void *sections = NULL;
 
             if (cmd->cmd == LC_SEGMENT) {
-                struct segment_command *seg_cmd = (struct segment_command *) cmd;
+                struct segment_command *seg_cmd = (struct segment_command *)cmd;
                 nsects = seg_cmd->nsects;
-                sections = (void *) (seg_cmd + 1);
+                sections = (void *)(seg_cmd + 1);
             } else { // LC_SEGMENT_64
-                struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
+                struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
                 nsects = seg_cmd->nsects;
-                sections = (void *) (seg_cmd + 1);
+                sections = (void *)(seg_cmd + 1);
             }
 
             // Проверка корректности числа секций
             if (nsects == 0 || sections == NULL) {
-                cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+                cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
                 continue;
             }
 
@@ -548,15 +523,13 @@ static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_inf
                 char sectname[17] = {0};
 
                 if (cmd->cmd == LC_SEGMENT) {
-                    struct section *section = &((struct section *) sections)[j];
-
+                    struct section *section = &((struct section *)sections)[j];
                     memcpy(segname, section->segname, 16);
                     segname[16] = '\0';
                     memcpy(sectname, section->sectname, 16);
                     sectname[16] = '\0';
                 } else { // LC_SEGMENT_64
-                    struct section_64 *section = &((struct section_64 *) sections)[j];
-
+                    struct section_64 *section = &((struct section_64 *)sections)[j];
                     memcpy(segname, section->segname, 16);
                     segname[16] = '\0';
                     memcpy(sectname, section->sectname, 16);
@@ -568,7 +541,7 @@ static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_inf
                 }
 
                 if (strcmp(segname, "__TEXT") == 0 && strcmp(sectname, "__text") == 0 &&
-                    mach_o_file->command_count <= 5) {
+                    mach_o_file->load_command_count <= 5) { // Исправлено: command_count -> load_command_count
                     strcpy(lang_info->language, "Assembly");
                     strcpy(lang_info->compiler, "Assembler");
                     return 0;
@@ -577,20 +550,25 @@ static int analyze_sections(const MachOFile *mach_o_file, LanguageInfo *lang_inf
         }
 
         if (cmd->cmdsize == 0) {
-            fprintf(stderr, "Invalid cmdsize detected, preventing infinite loop\n");
+            fprintf(stderr, "Ошибка: Обнаружен неверный размер команды, предотвращение бесконечного цикла\n");
             return -1;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     return -1;
 }
 
 static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInfo *lang_info) {
+    if (!mach_o_file || !file || !lang_info) {
+        fprintf(stderr, "Ошибка: Неверные аргументы в analyze_strings\n");
+        return -1;
+    }
+
     long current_offset = ftell(file);
 
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: command_count -> load_command_count
 
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_SEGMENT || cmd->cmd == LC_SEGMENT_64) {
@@ -598,13 +576,13 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
             struct section *sections = NULL;
 
             if (cmd->cmd == LC_SEGMENT) {
-                struct segment_command *seg_cmd = (struct segment_command *) cmd;
+                struct segment_command *seg_cmd = (struct segment_command *)cmd;
                 nsects = seg_cmd->nsects;
-                sections = (struct section *) (seg_cmd + 1);
+                sections = (struct section *)(seg_cmd + 1);
             } else {
-                struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
+                struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
                 nsects = seg_cmd->nsects;
-                sections = (struct section *) (seg_cmd + 1);
+                sections = (struct section *)(seg_cmd + 1);
             }
 
             for (uint32_t j = 0; j < nsects; j++) {
@@ -661,7 +639,7 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
                 }
             }
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     fseek(file, current_offset, SEEK_SET);
@@ -670,41 +648,41 @@ static int analyze_strings(const MachOFile *mach_o_file, FILE *file, LanguageInf
 
 static void combine_results(DetectionResults *results) {
     if (!results) {
-        fprintf(stderr, "Invalid arguments to combine_results\n");
+        fprintf(stderr, "Ошибка: Неверные аргументы в combine_results\n");
         return;
     }
 
     if (strcmp(results->detected_language_by_symbols, results->detected_language_by_sections) == 0 &&
         strcmp(results->detected_language_by_sections, results->detected_language_by_strings) == 0 &&
-        strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        strcmp(results->detected_language_by_symbols, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_symbols);
         strcpy(results->final_compiler, results->detected_compiler_by_symbols);
     } else if (strcmp(results->detected_language_by_symbols, results->detected_language_by_sections) == 0 &&
-               strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+               strcmp(results->detected_language_by_symbols, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_symbols);
         strcpy(results->final_compiler, results->detected_compiler_by_symbols);
-        fprintf(stderr, "Warning: String analysis does not match symbol and section analysis.\n");
+        fprintf(stderr, "Предупреждение: Анализ строк не совпадает с анализом символов и секций.\n");
     } else if (strcmp(results->detected_language_by_symbols, results->detected_language_by_strings) == 0 &&
-               strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+               strcmp(results->detected_language_by_symbols, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_symbols);
         strcpy(results->final_compiler, results->detected_compiler_by_symbols);
-        fprintf(stderr, "Warning: Section analysis does not match symbol and string analysis.\n");
+        fprintf(stderr, "Предупреждение: Анализ секций не совпадает с анализом символов и строк.\n");
     } else if (strcmp(results->detected_language_by_sections, results->detected_language_by_strings) == 0 &&
-               strcmp(results->detected_language_by_sections, "Unknown") != 0) {
+               strcmp(results->detected_language_by_sections, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_sections);
         strcpy(results->final_compiler, results->detected_compiler_by_sections);
-        fprintf(stderr, "Warning: Symbol analysis does not match section and string analysis.\n");
-    } else if (strcmp(results->detected_language_by_symbols, "Unknown") != 0) {
+        fprintf(stderr, "Предупреждение: Анализ символов не совпадает с анализом секций и строк.\n");
+    } else if (strcmp(results->detected_language_by_symbols, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_symbols);
         strcpy(results->final_compiler, results->detected_compiler_by_symbols);
-    } else if (strcmp(results->detected_language_by_sections, "Unknown") != 0) {
+    } else if (strcmp(results->detected_language_by_sections, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_sections);
         strcpy(results->final_compiler, results->detected_compiler_by_sections);
-    } else if (strcmp(results->detected_language_by_strings, "Unknown") != 0) {
+    } else if (strcmp(results->detected_language_by_strings, "Неизвестно") != 0) {
         strcpy(results->final_language, results->detected_language_by_strings);
         strcpy(results->final_compiler, results->detected_compiler_by_strings);
     } else {
-        strcpy(results->final_language, "Unknown");
-        strcpy(results->final_compiler, "Unknown");
+        strcpy(results->final_language, "Неизвестно");
+        strcpy(results->final_compiler, "Неизвестно");
     }
 }

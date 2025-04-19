@@ -8,6 +8,7 @@
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonCrypto.h>
 #include <macho_printer.h>
+#include <CommonCrypto/CommonDigest.h>
 
 #define CSMAGIC_CODEDIRECTORY 0xfade0c02
 #define CSMAGIC_BLOBWRAPPER 0xfade0b01
@@ -61,55 +62,70 @@ static int read_and_validate(FILE *file, void *buffer, size_t size, const char *
  * @param file Указатель на открытый файл Mach-O для доступа к данным подписи.
  * @return 0 при успешной проверке, -1 в случае ошибки.
  */
+
+
+/**
+ * Анализирует подпись кода в Mach-O файле.
+ *
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на файл для чтения данных подписи.
+ * @return 0 при успехе, -1 в случае ошибки.
+ */
 int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
     if (!mach_o_file || !mach_o_file->commands || !file) {
-        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        fprintf(stderr, "Ошибка: Неверный Mach-O файл или отсутствуют команды для обработки.\n");
         return -1;
     }
 
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: load_command_count
     struct linkedit_data_command *code_sig_cmd = NULL;
 
+    // Поиск команды подписи кода
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_CODE_SIGNATURE) {
-            code_sig_cmd = (struct linkedit_data_command *) cmd;
+            code_sig_cmd = (struct linkedit_data_command *)cmd;
             break;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     if (!code_sig_cmd) {
-        printf("No Code Signature detected in this Mach-O file.\n");
+        printf("Подпись кода не обнаружена в данном Mach-O файле.\n");
         return 0;
     }
 
-    printf("Code Signature detected. Verifying signature...\n");
+    printf("Подпись кода обнаружена. Проверка подписи...\n");
 
+    // Перемещение к данным подписи
     if (fseek(file, code_sig_cmd->dataoff, SEEK_SET) != 0) {
-        perror("Failed to seek to code signature data");
+        perror("Ошибка: Не удалось переместиться к данным подписи кода");
         return -1;
     }
 
+    // Выделение памяти для данных подписи
     uint8_t *signature_data = malloc(code_sig_cmd->datasize);
     if (!signature_data) {
-        fprintf(stderr, "Failed to allocate memory for code signature data.\n");
+        fprintf(stderr, "Ошибка: Не удалось выделить память для данных подписи кода.\n");
         return -1;
     }
 
+    // Чтение данных подписи
     if (fread(signature_data, 1, code_sig_cmd->datasize, file) != code_sig_cmd->datasize) {
-        fprintf(stderr, "Failed to read code signature data.\n");
+        fprintf(stderr, "Ошибка: Не удалось прочитать данные подписи кода.\n");
         free(signature_data);
         return -1;
     }
 
-    uint32_t magic = *(uint32_t *) signature_data;
+    // Проверка magic-числа подписи
+    uint32_t magic = *(uint32_t *)signature_data;
     if (magic != CSMAGIC_CODEDIRECTORY) {
-        printf("Warning: Code Signature magic number does not match expected value.\n");
+        printf("Предупреждение: Magic-число подписи кода не соответствует ожидаемому значению.\n");
         free(signature_data);
         return -1;
     }
 
+    // Структура директории кода
     struct code_directory {
         uint32_t magic;
         uint32_t length;
@@ -128,68 +144,87 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
         uint32_t scatterOffset;
     };
 
-    struct code_directory *cd = (struct code_directory *) signature_data;
+    struct code_directory *cd = (struct code_directory *)signature_data;
 
+    // Проверка длины директории кода
     if (cd->length != code_sig_cmd->datasize) {
-        printf("Warning: Code Directory length does not match expected value.\n");
+        printf("Предупреждение: Длина директории кода не соответствует ожидаемому значению.\n");
         free(signature_data);
         return -1;
     }
 
-    printf("Code Directory version: 0x%x\n", cd->version);
+    printf("Версия директории кода: 0x%x\n", cd->version);
     if (cd->version < 0x20100) {
-        printf("Warning: Code Directory version is outdated. Consider updating for better security.\n");
+        printf("Предупреждение: Версия директории кода устарела. Рекомендуется обновление для повышения безопасности.\n");
     }
 
+    // Вывод идентификатора
     if (cd->identOffset < code_sig_cmd->datasize) {
-        char *identifier = (char *) (signature_data + cd->identOffset);
-        printf("Code Directory identifier: %s\n", identifier);
+        char *identifier = (char *)(signature_data + cd->identOffset);
+        printf("Идентификатор директории кода: %s\n", identifier);
     } else {
-        printf("Warning: Invalid identifier offset in Code Directory.\n");
+        printf("Предупреждение: Неверное смещение идентификатора в директории кода.\n");
         free(signature_data);
         return -1;
     }
 
+    // Вывод первых 16 байт хеша
     uint8_t *hash_data = signature_data + cd->hashOffset;
-    printf("Code Directory Hash (first 16 bytes): ");
+    printf("Хеш директории кода (первые 16 байт): ");
     for (size_t i = 0; i < 16 && i < cd->length - cd->hashOffset; i++) {
         printf("%02x ", hash_data[i]);
     }
     printf("\n");
 
+    // Вычисление SHA-256 хеша
     uint8_t calculated_hash[CC_SHA256_DIGEST_LENGTH];
     CC_SHA256_CTX sha_ctx;
     CC_SHA256_Init(&sha_ctx);
     CC_SHA256_Update(&sha_ctx, signature_data, cd->length);
     CC_SHA256_Final(calculated_hash, &sha_ctx);
 
-    printf("Calculated SHA-256 Hash: ");
+    printf("Вычисленный SHA-256 хеш: ");
     for (size_t i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) {
         printf("%02x", calculated_hash[i]);
     }
     printf("\n");
 
-    printf("Code Signature appears valid (based on preliminary checks).\n");
+    printf("Подпись кода выглядит действительной (на основе предварительных проверок).\n");
 
     free(signature_data);
     return 0;
 }
 
 int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
-    if (!file || !mach_o_file) return -1;
-
-    long pos = ftell(file);
-    printf("[DEBUG] Позиция в файле перед чтением заголовка: %ld\n", pos);
-
-    uint32_t magic;
-    if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
-        fprintf(stderr, "Не удалось прочитать magic Mach-O\n");
+    if (!file || !mach_o_file) {
+        fprintf(stderr, "Ошибка: NULL указатель для файла или структуры MachOFile\n");
         return -1;
     }
+
+    // Проверяем размер файла
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    if (file_size < sizeof(uint32_t)) {
+        fprintf(stderr, "Ошибка: Файл слишком мал для Mach-O\n");
+        return -1;
+    }
+    rewind(file);
+
+    // Инициализируем структуру MachOFile
+    memset(mach_o_file, 0, sizeof(MachOFile));
+
+    // Читаем magic number
+    uint32_t magic;
+    if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
+        fprintf(stderr, "Ошибка чтения magic number\n");
+        return -1;
+    }
+    fseek(file, 0, SEEK_SET); // Возвращаемся к началу
 
     bool is_64_bit = false;
     bool is_big_endian = false;
 
+    // Определяем формат файла
     switch (magic) {
         case MH_MAGIC_64:
             is_64_bit = true;
@@ -199,44 +234,89 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
             is_64_bit = true;
             is_big_endian = true;
             break;
+        case MH_MAGIC:
+            is_64_bit = false;
+            is_big_endian = false;
+            break;
+        case MH_CIGAM:
+            is_64_bit = false;
+            is_big_endian = true;
+            break;
         default:
             fprintf(stderr, "Неподдерживаемый magic: 0x%x\n", magic);
             return -1;
     }
 
-    mach_o_file->is_64_bit = true;
+    // Сохраняем magic и флаги
     mach_o_file->magic = magic;
+    mach_o_file->is_64_bit = is_64_bit;
 
-    uint32_t cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags, reserved;
-    if (fread(&cputype, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&cpusubtype, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&filetype, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&ncmds, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&sizeofcmds, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&flags, sizeof(uint32_t), 1, file) != 1 ||
-        fread(&reserved, sizeof(uint32_t), 1, file) != 1) {
-        fprintf(stderr, "Ошибка чтения оставшихся полей заголовка Mach-O\n");
-        return -1;
+    // Отладочная информация
+    printf("Magic: 0x%x, is_64_bit: %d, is_big_endian: %d\n", magic, is_64_bit, is_big_endian);
+
+    if (is_64_bit) {
+        struct mach_header_64 header;
+        if (fread(&header, sizeof(header), 1, file) != 1) {
+            fprintf(stderr, "Ошибка чтения заголовка Mach-O 64-bit\n");
+            return -1;
+        }
+
+        // Проверяем валидность заголовка
+        if (header.cputype == 0) {
+            fprintf(stderr, "Ошибка: Недопустимый CPU Type в заголовке\n");
+            return -1;
+        }
+        if (header.ncmds == 0) {
+            fprintf(stderr, "Ошибка: Нет команд загрузки в заголовке\n");
+            return -1;
+        }
+
+        // Заполняем структуру с учётом порядка байтов
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
+        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
+        mach_o_file->header_size = sizeof(struct mach_header_64);
+
+        // Отладочная информация после заполнения структуры
+        printf("64-bit header: cputype=0x%x, ncmds=%u, sizeofcmds=%u\n",
+               mach_o_file->cpu_type, mach_o_file->load_command_count, mach_o_file->sizeofcmds);
+        printf("MachOFile after filling: magic=0x%x, cputype=0x%x, ncmds=%u\n",
+               mach_o_file->magic, mach_o_file->cpu_type, mach_o_file->load_command_count);
+    } else {
+        struct mach_header header;
+        if (fread(&header, sizeof(header), 1, file) != 1) {
+            fprintf(stderr, "Ошибка чтения заголовка Mach-O 32-bit\n");
+            return -1;
+        }
+
+        // Проверяем валидность заголовка
+        if (header.cputype == 0) {
+            fprintf(stderr, "Ошибка: Недопустимый CPU Type в заголовке\n");
+            return -1;
+        }
+        if (header.ncmds == 0) {
+            fprintf(stderr, "Ошибка: Нет команд загрузки в заголовке\n");
+            return -1;
+        }
+
+        // Заполняем структуру
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
+        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
+        mach_o_file->header_size = sizeof(struct mach_header);
+
+        // Отладочная информация
+        printf("32-bit header: cputype=0x%x, ncmds=%u, sizeofcmds=%u\n",
+               mach_o_file->cpu_type, mach_o_file->load_command_count, mach_o_file->sizeofcmds);
+        printf("MachOFile after filling: magic=0x%x, cputype=0x%x, ncmds=%u\n",
+               mach_o_file->magic, mach_o_file->cpu_type, mach_o_file->load_command_count);
     }
-
-    if (is_big_endian) {
-        cputype    = OSSwapBigToHostInt32(cputype);
-        cpusubtype = OSSwapBigToHostInt32(cpusubtype);
-        filetype   = OSSwapBigToHostInt32(filetype);
-        ncmds      = OSSwapBigToHostInt32(ncmds);
-        sizeofcmds = OSSwapBigToHostInt32(sizeofcmds);
-        flags      = OSSwapBigToHostInt32(flags);
-        reserved   = OSSwapBigToHostInt32(reserved);
-    }
-
-    mach_o_file->cpu_type           = cputype;
-    mach_o_file->cpu_subtype        = cpusubtype;
-    mach_o_file->file_type          = filetype;
-    mach_o_file->flags              = flags;
-    mach_o_file->load_command_count = ncmds;
-
-    printf("[DEBUG] Magic: 0x%x, CPU Type: %u, Subtype: %u, Ncmds: %u, Flags: 0x%x\n",
-           magic, cputype, cpusubtype, ncmds, flags);
 
     return 0;
 }
@@ -355,28 +435,132 @@ static int analyze_mach_header(FILE *file, MachOFile *mach_o_file) {
     return 0;
 }
 
+/**
+ * Анализирует команды загрузки Mach-O файла и заполняет соответствующие поля структуры MachOFile.
+ *
+ * @param file Указатель на файл.
+ * @param mach_o_file Структура с данными о Mach-O.
+ * @return 0 при успехе, -1 в случае ошибки.
+ */
 int analyze_load_commands(FILE *file, MachOFile *mach_o_file) {
-    uint32_t ncmds, sizeofcmds;
-    if (mach_o_file->is_64_bit) {
-        ncmds = mach_o_file->header.header64.ncmds;
-        sizeofcmds = mach_o_file->header.header64.sizeofcmds;
-    } else {
-        ncmds = mach_o_file->header.header32.ncmds;
-        sizeofcmds = mach_o_file->header.header32.sizeofcmds;
+    if (!file || !mach_o_file) {
+        fprintf(stderr, "Ошибка: NULL указатель на файл или MachOFile\n");
+        return -1;
     }
 
-    mach_o_file->commands = malloc(sizeofcmds);
+    // Проверяем, что заголовок валиден
+    if (mach_o_file->load_command_count == 0 || mach_o_file->sizeofcmds == 0) {
+        fprintf(stderr, "Ошибка: Нет команд загрузки\n");
+        return -1;
+    }
+
+    // Выделяем память для команд
+    mach_o_file->commands = malloc(mach_o_file->sizeofcmds);
     if (!mach_o_file->commands) {
-        fprintf(stderr, "Failed to allocate memory for load commands.\n");
+        fprintf(stderr, "Ошибка: Не удалось выделить память для команд загрузки\n");
         return -1;
     }
 
-    if (read_and_validate(file, mach_o_file->commands, sizeofcmds, "Failed to read load commands") != 0) {
+    // Читаем команды
+    if (fread(mach_o_file->commands, mach_o_file->sizeofcmds, 1, file) != 1) {
+        fprintf(stderr, "Ошибка: Не удалось прочитать команды загрузки\n");
         free(mach_o_file->commands);
+        mach_o_file->commands = NULL;
         return -1;
     }
 
-    mach_o_file->command_count = ncmds;
+    // Подсчитываем сегменты и библиотеки
+    struct load_command *cmd = mach_o_file->commands;
+    uint32_t segment_count = 0;
+    uint32_t dylib_count = 0;
+    for (uint32_t i = 0; i < mach_o_file->load_command_count; i++) {
+        if (cmd->cmd == LC_SEGMENT || cmd->cmd == LC_SEGMENT_64) {
+            segment_count++;
+        } else if (cmd->cmd == LC_LOAD_DYLIB || cmd->cmd == LC_LOAD_WEAK_DYLIB ||
+                   cmd->cmd == LC_REEXPORT_DYLIB || cmd->cmd == LC_LOAD_UPWARD_DYLIB ||
+                   cmd->cmd == LC_LAZY_LOAD_DYLIB) {
+            dylib_count++;
+        }
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
+    // Выделяем память для сегментов и библиотек
+    mach_o_file->segments = calloc(segment_count, sizeof(Segment));
+    mach_o_file->dylibs = calloc(dylib_count, sizeof(Dylib));
+    if (!mach_o_file->segments || !mach_o_file->dylibs) {
+        fprintf(stderr, "Ошибка: Не удалось выделить память для сегментов или библиотек\n");
+        free(mach_o_file->commands);
+        free(mach_o_file->segments);
+        free(mach_o_file->dylibs);
+        mach_o_file->commands = NULL;
+        mach_o_file->segments = NULL;
+        mach_o_file->dylibs = NULL;
+        return -1;
+    }
+    mach_o_file->segment_count = segment_count;
+    mach_o_file->dylib_count = dylib_count;
+
+    // Заполняем сегменты и библиотеки
+    cmd = mach_o_file->commands;
+    uint32_t seg_index = 0;
+    uint32_t dylib_index = 0;
+    for (uint32_t i = 0; i < mach_o_file->load_command_count; i++) {
+        if (cmd->cmd == LC_SEGMENT_64) {
+            struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
+            Segment *seg = &mach_o_file->segments[seg_index++];
+            strncpy(seg->segname, seg_cmd->segname, 16);
+            seg->segname[16] = '\0';
+            seg->vmaddr = seg_cmd->vmaddr;
+            seg->vmsize = seg_cmd->vmsize;
+            seg->fileoff = seg_cmd->fileoff;
+            seg->filesize = seg_cmd->filesize;
+            seg->maxprot = seg_cmd->maxprot;
+            seg->initprot = seg_cmd->initprot;
+            seg->nsects = seg_cmd->nsects;
+            seg->flags = seg_cmd->flags;
+            // Заполнение секций (при необходимости)
+        } else if (cmd->cmd == LC_SEGMENT) {
+            struct segment_command *seg_cmd = (struct segment_command *)cmd;
+            Segment *seg = &mach_o_file->segments[seg_index++];
+            strncpy(seg->segname, seg_cmd->segname, 16);
+            seg->segname[16] = '\0';
+            seg->vmaddr = seg_cmd->vmaddr;
+            seg->vmsize = seg_cmd->vmsize;
+            seg->fileoff = seg_cmd->fileoff;
+            seg->filesize = seg_cmd->filesize;
+            seg->maxprot = seg_cmd->maxprot;
+            seg->initprot = seg_cmd->initprot;
+            seg->nsects = seg_cmd->nsects;
+            seg->flags = seg_cmd->flags;
+            // Заполнение секций (при необходимости)
+        } else if (cmd->cmd == LC_LOAD_DYLIB || cmd->cmd == LC_LOAD_WEAK_DYLIB ||
+                   cmd->cmd == LC_REEXPORT_DYLIB || cmd->cmd == LC_LOAD_UPWARD_DYLIB ||
+                   cmd->cmd == LC_LAZY_LOAD_DYLIB) {
+            struct dylib_command *dylib_cmd = (struct dylib_command *)cmd;
+            Dylib *dylib = &mach_o_file->dylibs[dylib_index++];
+            char *name = (char *)cmd + dylib_cmd->dylib.name.offset;
+            dylib->name = strdup(name);
+            if (!dylib->name) {
+                fprintf(stderr, "Ошибка: Не удалось выделить память для имени библиотеки\n");
+                // Освобождаем уже выделенные ресурсы
+                for (uint32_t j = 0; j < dylib_index; j++) {
+                    free(mach_o_file->dylibs[j].name);
+                }
+                free(mach_o_file->dylibs);
+                free(mach_o_file->segments);
+                free(mach_o_file->commands);
+                mach_o_file->dylibs = NULL;
+                mach_o_file->segments = NULL;
+                mach_o_file->commands = NULL;
+                return -1;
+            }
+            dylib->timestamp = dylib_cmd->dylib.timestamp;
+            dylib->current_version = dylib_cmd->dylib.current_version;
+            dylib->compatibility_version = dylib_cmd->dylib.compatibility_version;
+        }
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
     return 0;
 }
 
@@ -388,35 +572,48 @@ static int read_and_validate(FILE *file, void *buffer, size_t size, const char *
     return 0;
 }
 
-void free_mach_o_file(MachOFile *mach_o_file) {
-    if (!mach_o_file) return;
+void free_mach_o_file(MachOFile *mf) {
+    if (!mf) {
+        fprintf(stderr, "Ошибка: NULL указатель на MachOFile\n");
+        return;
+    }
 
-    if (mach_o_file->segments) {
-        for (int i = 0; i < mach_o_file->segment_count; i++) {
-            if (mach_o_file->segments[i].sections) {
-                free(mach_o_file->segments[i].sections);
-                mach_o_file->segments[i].sections = NULL;
+    // Освобождаем команды загрузки
+    if (mf->commands) {
+        free(mf->commands);
+        mf->commands = NULL;
+    }
+
+    // Освобождаем динамические библиотеки
+    if (mf->dylibs) {
+        for (uint32_t i = 0; i < mf->dylib_count; ++i) {
+            if (mf->dylibs[i].name) {
+                free(mf->dylibs[i].name);
+                mf->dylibs[i].name = NULL;
             }
         }
-        free(mach_o_file->segments);
-        mach_o_file->segments = NULL;
+        free(mf->dylibs);
+        mf->dylibs = NULL;
     }
 
-    if (mach_o_file->load_commands) {
-        free(mach_o_file->load_commands);
-        mach_o_file->load_commands = NULL;
-    }
-
-    if (mach_o_file->linked_dylibs) {
-        for (int i = 0; i < mach_o_file->linked_dylib_count; i++) {
-            if (mach_o_file->linked_dylibs[i]) {
-                free(mach_o_file->linked_dylibs[i]);
-                mach_o_file->linked_dylibs[i] = NULL;
+    // Освобождаем сегменты
+    if (mf->segments) {
+        for (uint32_t i = 0; i < mf->segment_count; ++i) {
+            if (mf->segments[i].sections) {
+                free(mf->segments[i].sections);
+                mf->segments[i].sections = NULL;
+            }
+            if (mf->segments[i].sections32) {
+                free(mf->segments[i].sections32);
+                mf->segments[i].sections32 = NULL;
             }
         }
-        free(mach_o_file->linked_dylibs);
-        mach_o_file->linked_dylibs = NULL;
+        free(mf->segments);
+        mf->segments = NULL;
     }
 
-    memset(mach_o_file, 0, sizeof(MachOFile));
+    // Сбрасываем счётчики
+    mf->dylib_count = 0;
+    mf->segment_count = 0;
+    mf->load_command_count = 0;
 }

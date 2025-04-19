@@ -11,6 +11,9 @@
  * @return true, если ASLR поддерживается, false — если нет.
  */
 static bool check_aslr(const MachOFile *mach_o_file) {
+    if (!mach_o_file) {
+        return false;
+    }
     return (mach_o_file->is_64_bit
             ? (mach_o_file->header.header64.flags & MH_PIE) != 0
             : (mach_o_file->header.header32.flags & MH_PIE) != 0);
@@ -23,6 +26,9 @@ static bool check_aslr(const MachOFile *mach_o_file) {
  * @return true, если DEP поддерживается, false — если нет.
  */
 static bool check_dep(const MachOFile *mach_o_file) {
+    if (!mach_o_file) {
+        return false;
+    }
     return (mach_o_file->is_64_bit
             ? (mach_o_file->header.header64.flags & MH_NO_HEAP_EXECUTION) != 0
             : (mach_o_file->header.header32.flags & MH_NO_HEAP_EXECUTION) != 0);
@@ -32,54 +38,75 @@ static bool check_dep(const MachOFile *mach_o_file) {
  * Проверяет наличие Stack Canaries.
  *
  * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на открытый файл Mach-O.
  * @return true, если Stack Canaries используются, false — если нет.
  */
 static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
-    if (!mach_o_file->commands || !file) {
+    if (!mach_o_file || !mach_o_file->commands || !file) {
+        fprintf(stderr, "Ошибка: Неверные аргументы в check_stack_canaries\n");
         return false;
     }
 
     struct load_command *cmd = mach_o_file->commands;
     struct symtab_command *symtab_cmd = NULL;
 
-    for (uint32_t i = 0; i < mach_o_file->command_count; i++) {
+    for (uint32_t i = 0; i < mach_o_file->load_command_count; i++) { // Исправлено: command_count -> load_command_count
         if (cmd->cmd == LC_SYMTAB) {
-            symtab_cmd = (struct symtab_command *) cmd;
+            symtab_cmd = (struct symtab_command *)cmd;
             break;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
-    if (!symtab_cmd) {
-        return false;  // Нет таблицы символов
+    if (!symtab_cmd || symtab_cmd->nsyms == 0) {
+        return false; // Нет таблицы символов
     }
 
-    fseek(file, symtab_cmd->symoff, SEEK_SET);
+    long current_offset = ftell(file);
+    if (current_offset == -1) {
+        fprintf(stderr, "Ошибка: Не удалось получить текущее смещение файла\n");
+        return false;
+    }
+
     size_t symbol_size = mach_o_file->is_64_bit ? sizeof(struct nlist_64) : sizeof(struct nlist);
     void *symbols = malloc(symtab_cmd->nsyms * symbol_size);
     if (!symbols) {
-        fprintf(stderr, "Failed to allocate memory for symbols.\n");
+        fprintf(stderr, "Ошибка: Не удалось выделить память для таблицы символов\n");
         return false;
     }
 
-    if (fread(symbols, symbol_size, symtab_cmd->nsyms, file) != symtab_cmd->nsyms) {
-        fprintf(stderr, "Failed to read symbol table.\n");
+    if (fseek(file, symtab_cmd->symoff, SEEK_SET) != 0) {
+        fprintf(stderr, "Ошибка: Не удалось переместиться к таблице символов\n");
         free(symbols);
         return false;
     }
+    if (fread(symbols, symbol_size, symtab_cmd->nsyms, file) != symtab_cmd->nsyms) {
+        fprintf(stderr, "Ошибка: Не удалось прочитать таблицу символов\n");
+        free(symbols);
+        fseek(file, current_offset, SEEK_SET);
+        return false;
+    }
 
-    fseek(file, symtab_cmd->stroff, SEEK_SET);
     char *string_table = malloc(symtab_cmd->strsize);
     if (!string_table) {
-        fprintf(stderr, "Failed to allocate memory for string table.\n");
+        fprintf(stderr, "Ошибка: Не удалось выделить память для таблицы строк\n");
         free(symbols);
+        fseek(file, current_offset, SEEK_SET);
         return false;
     }
 
-    if (fread(string_table, 1, symtab_cmd->strsize, file) != symtab_cmd->strsize) {
-        fprintf(stderr, "Failed to read string table.\n");
+    if (fseek(file, symtab_cmd->stroff, SEEK_SET) != 0) {
+        fprintf(stderr, "Ошибка: Не удалось переместиться к таблице строк\n");
         free(symbols);
         free(string_table);
+        fseek(file, current_offset, SEEK_SET);
+        return false;
+    }
+    if (fread(string_table, 1, symtab_cmd->strsize, file) != symtab_cmd->strsize) {
+        fprintf(stderr, "Ошибка: Не удалось прочитать таблицу строк\n");
+        free(symbols);
+        free(string_table);
+        fseek(file, current_offset, SEEK_SET);
         return false;
     }
 
@@ -87,158 +114,171 @@ static bool check_stack_canaries(const MachOFile *mach_o_file, FILE *file) {
     bool found_stack_chk_guard = false;
 
     for (uint32_t j = 0; j < symtab_cmd->nsyms; j++) {
+        char *symbol_name;
+        uint32_t strx;
         if (mach_o_file->is_64_bit) {
-            struct nlist_64 *sym = &((struct nlist_64 *) symbols)[j];
-            char *symbol_name = string_table + sym->n_un.n_strx;
-            if (strcmp(symbol_name, "__stack_chk_fail") == 0) {
-                found_stack_chk_fail = true;
-            }
-            if (strcmp(symbol_name, "__stack_chk_guard") == 0) {
-                found_stack_chk_guard = true;
-            }
+            struct nlist_64 *sym = &((struct nlist_64 *)symbols)[j];
+            strx = sym->n_un.n_strx;
+            if (strx >= symtab_cmd->strsize) continue;
+            symbol_name = string_table + strx;
         } else {
-            struct nlist *sym = &((struct nlist *) symbols)[j];
-            char *symbol_name = string_table + sym->n_un.n_strx;
-            if (strcmp(symbol_name, "__stack_chk_fail") == 0) {
-                found_stack_chk_fail = true;
-            }
-            if (strcmp(symbol_name, "__stack_chk_guard") == 0) {
-                found_stack_chk_guard = true;
-            }
+            struct nlist *sym = &((struct nlist *)symbols)[j];
+            strx = sym->n_un.n_strx;
+            if (strx >= symtab_cmd->strsize) continue;
+            symbol_name = string_table + strx;
+        }
+
+        if (strcmp(symbol_name, "__stack_chk_fail") == 0) {
+            found_stack_chk_fail = true;
+        } else if (strcmp(symbol_name, "__stack_chk_guard") == 0) {
+            found_stack_chk_guard = true;
         }
 
         if (found_stack_chk_fail && found_stack_chk_guard) {
             break;
         }
     }
+
     free(symbols);
     free(string_table);
+    fseek(file, current_offset, SEEK_SET);
 
     return found_stack_chk_fail && found_stack_chk_guard;
 }
 
 /**
- * Функция для проверки наличия sandbox и entitlements в Mach-O файле.
- * Она ищет LC_CODE_SIGNATURE и LC_LOAD_DYLIB команды, которые могут указывать на использование песочницы.
+ * Проверяет наличие sandbox и entitlements в Mach-O файле.
+ * Ищет LC_CODE_SIGNATURE и LC_LOAD_DYLIB команды, которые могут указывать на использование песочницы.
  * Также проверяет наличие LC_SEGMENT и LC_SEGMENT_64 команд с секцией __TEXT,__entitlements.
  *
- * @param mach_o_file Структура MachOFile для хранения информации о файле.
+ * @param mach_o_file Указатель на структуру MachOFile.
  */
 void check_sandbox_and_entitlements(const MachOFile *mach_o_file) {
     if (!mach_o_file || !mach_o_file->commands) {
-        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        fprintf(stderr, "Ошибка: Неверный Mach-O файл или отсутствуют команды\n");
         return;
     }
 
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
-    int sandbox_found = 0;
-    int entitlements_found = 0;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: command_count -> load_command_count
+    bool sandbox_found = false;
+    bool entitlements_found = false;
 
     for (uint32_t i = 0; i < ncmds; i++) {
         switch (cmd->cmd) {
             case LC_LOAD_DYLIB: {
-                struct dylib_command *dylib_cmd = (struct dylib_command *) cmd;
-                char *dylib_name = (char *) cmd + dylib_cmd->dylib.name.offset;
+                struct dylib_command *dylib_cmd = (struct dylib_command *)cmd;
+                if (dylib_cmd->dylib.name.offset >= cmd->cmdsize) {
+                    break; // Пропускаем некорректное смещение
+                }
+                char *dylib_name = (char *)cmd + dylib_cmd->dylib.name.offset;
                 if (strstr(dylib_name, "sandbox")) {
-                    sandbox_found = 1;
-                    printf("Sandbox detected: %s\n", dylib_name);
+                    sandbox_found = true;
+                    printf("Обнаружена песочница: %s\n", dylib_name);
                 }
                 break;
             }
             case LC_SEGMENT: {
-                struct segment_command *seg_cmd = (struct segment_command *) cmd;
+                struct segment_command *seg_cmd = (struct segment_command *)cmd;
                 if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
-                    struct section *sections = (struct section *) (seg_cmd + 1);
+                    struct section *sections = (struct section *)(seg_cmd + 1);
                     for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
-                        if (strcmp(sections[j].sectname, "__entitlements") == 0) {
-                            entitlements_found = 1;
-                            printf("Entitlements detected in section: %s\n", sections[j].sectname);
+                        char sectname[17] = {0};
+                        strncpy(sectname, sections[j].sectname, 16);
+                        if (strcmp(sectname, "__entitlements") == 0) {
+                            entitlements_found = true;
+                            printf("Обнаружены полномочия в секции: %s\n", sectname);
                         }
                     }
                 }
                 break;
             }
             case LC_SEGMENT_64: {
-                struct segment_command_64 *seg_cmd = (struct segment_command_64 *) cmd;
+                struct segment_command_64 *seg_cmd = (struct segment_command_64 *)cmd;
                 if (strcmp(seg_cmd->segname, "__TEXT") == 0) {
-                    struct section_64 *sections = (struct section_64 *) (seg_cmd + 1);
+                    struct section_64 *sections = (struct section_64 *)(seg_cmd + 1);
                     for (uint32_t j = 0; j < seg_cmd->nsects; j++) {
-                        if (strcmp(sections[j].sectname, "__entitlements") == 0) {
-                            entitlements_found = 1;
-                            printf("Entitlements detected in section: %s\n", sections[j].sectname);
+                        char sectname[17] = {0};
+                        strncpy(sectname, sections[j].sectname, 16);
+                        if (strcmp(sectname, "__entitlements") == 0) {
+                            entitlements_found = true;
+                            printf("Обнаружены полномочия в секции: %s\n", sectname);
                         }
                     }
                 }
                 break;
             }
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
 
     if (!sandbox_found) {
-        printf("No Sandbox detected in this Mach-O file.\n");
+        printf("Песочница не обнаружена в этом Mach-O файле.\n");
     }
-
     if (!entitlements_found) {
-        printf("No Entitlements detected in this Mach-O file.\n");
+        printf("Полномочия не обнаружены в этом Mach-O файле.\n");
     }
 }
 
 /**
- * Функция для проверки наличия Bitcode в Mach-O файле.
+ * Проверяет наличие Bitcode в Mach-O файле.
  * Bitcode используется для обеспечения совместимости с различными архитектурами.
  * Проверяет наличие LC_DATA_IN_CODE команд.
  *
- * @param mach_o_file Структура MachOFile для хранения информации о файле.
+ * @param mach_o_file Указатель на структуру MachOFile.
  * @return true, если Bitcode найден, иначе false.
  */
 bool check_bitcode_presence(const MachOFile *mach_o_file) {
     if (!mach_o_file || !mach_o_file->commands) {
-        fprintf(stderr, "Invalid Mach-O file or no commands to process.\n");
+        fprintf(stderr, "Ошибка: Неверный Mach-O файл или отсутствуют команды\n");
         return false;
     }
 
     struct load_command *cmd = mach_o_file->commands;
-    uint32_t ncmds = mach_o_file->command_count;
+    uint32_t ncmds = mach_o_file->load_command_count; // Исправлено: command_count -> load_command_count
 
     for (uint32_t i = 0; i < ncmds; i++) {
         if (cmd->cmd == LC_DATA_IN_CODE) {
             return true;
         }
-        cmd = (struct load_command *) ((uint8_t *) cmd + cmd->cmdsize);
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
     }
     return false;
 }
 
-//TODO: return check struct data
+/**
+ * Проверяет функции безопасности Mach-O файла.
+ *
+ * @param mach_o_file Указатель на структуру MachOFile.
+ * @param file Указатель на открытый файл Mach-O.
+ */
 void check_security_features(const MachOFile *mach_o_file, FILE *file) {
-    if (!mach_o_file) {
-        printf("Invalid Mach-O file.\n");
+    if (!mach_o_file || !file) {
+        printf("Ошибка: Неверный Mach-O файл или файл не открыт\n");
         return;
     }
 
-    printf("Security Features Check:\n");
+    printf("Проверка функций безопасности:\n");
 
     // Проверка ASLR
     if (check_aslr(mach_o_file)) {
-        printf("  ASLR: Supported (PIE flag is set)\n");
+        printf("  ASLR: Поддерживается (установлен флаг PIE)\n");
     } else {
-        printf("  ASLR: Not supported (No PIE flag)\n");
+        printf("  ASLR: Не поддерживается (флаг PIE отсутствует)\n");
     }
 
     // Проверка DEP
     if (check_dep(mach_o_file)) {
-        printf("  DEP: Supported (No heap execution)\n");
+        printf("  DEP: Поддерживается (отключено выполнение на куче)\n");
     } else {
-        printf("  DEP: Not supported\n");
+        printf("  DEP: Не поддерживается\n");
     }
 
     // Проверка Stack Canaries
     if (check_stack_canaries(mach_o_file, file)) {
-        printf("  Stack Canaries: Supported\n");
+        printf("  Stack Canaries: Поддерживаются\n");
     } else {
-        printf("  Stack Canaries: Not supported\n");
+        printf("  Stack Canaries: Не поддерживаются\n");
     }
 
     // Проверка Sandbox и Entitlements
@@ -246,8 +286,8 @@ void check_security_features(const MachOFile *mach_o_file, FILE *file) {
 
     // Проверка наличия Bitcode
     if (check_bitcode_presence(mach_o_file)) {
-        printf("Bitcode detected in this Mach-O file.\n");
+        printf("Обнаружен Bitcode в этом Mach-O файле.\n");
     } else {
-        printf("No Bitcode detected in this Mach-O file.\n");
+        printf("Bitcode не обнаружен в этом Mach-O файле.\n");
     }
 }

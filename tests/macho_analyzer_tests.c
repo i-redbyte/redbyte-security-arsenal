@@ -110,7 +110,7 @@ void test_analyze_load_commands() {
     commands[1].cmdsize = sizeof(struct load_command);
 
     mock_file.commands = commands;
-    mock_file.command_count = 2;
+    mock_file.load_command_count = 2;
 
     FILE *output = freopen("output.txt", "w", stdout);
     if (!output) {
