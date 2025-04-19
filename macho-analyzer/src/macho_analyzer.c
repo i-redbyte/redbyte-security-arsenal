@@ -175,81 +175,68 @@ int analyze_code_signature(const MachOFile *mach_o_file, FILE *file) {
     return 0;
 }
 
-
 int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
     if (!file || !mach_o_file) return -1;
 
-    uint32_t magic = 0;
+    long pos = ftell(file);
+    printf("[DEBUG] Позиция в файле перед чтением заголовка: %ld\n", pos);
+
+    uint32_t magic;
     if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
-        fprintf(stderr, "Failed to read Mach-O magic\n");
+        fprintf(stderr, "Не удалось прочитать magic Mach-O\n");
         return -1;
     }
-
-    rewind(file);  // Вернуться к началу для повторного чтения структур
 
     bool is_64_bit = false;
     bool is_big_endian = false;
 
     switch (magic) {
-        case MH_MAGIC:
-            is_64_bit = false;
-            is_big_endian = false;
-            break;
         case MH_MAGIC_64:
             is_64_bit = true;
             is_big_endian = false;
-            break;
-        case MH_CIGAM:
-            is_64_bit = false;
-            is_big_endian = true;
             break;
         case MH_CIGAM_64:
             is_64_bit = true;
             is_big_endian = true;
             break;
         default:
-            fprintf(stderr, "Unsupported file format or invalid magic number: 0x%x\n", magic);
+            fprintf(stderr, "Неподдерживаемый magic: 0x%x\n", magic);
             return -1;
     }
 
-    mach_o_file->is_64_bit = is_64_bit;
+    mach_o_file->is_64_bit = true;
     mach_o_file->magic = magic;
 
-    if (is_64_bit) {
-        struct mach_header_64 header64;
-        if (fread(&header64, sizeof(struct mach_header_64), 1, file) != 1) {
-            fprintf(stderr, "Failed to read Mach-O 64-bit header\n");
-            return -1;
-        }
-
-        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header64.cputype) : header64.cputype;
-        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header64.cpusubtype) : header64.cpusubtype;
-        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header64.filetype) : header64.filetype;
-        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header64.flags) : header64.flags;
-
-        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header64.ncmds) : header64.ncmds;
-
-    } else {
-        struct mach_header header;
-        if (fread(&header, sizeof(struct mach_header), 1, file) != 1) {
-            fprintf(stderr, "Failed to read Mach-O 32-bit header\n");
-            return -1;
-        }
-
-        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
-        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
-        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
-        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
-
-        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
-    }
-
-    // Установим позицию для чтения load commands
-    long lc_offset = is_64_bit ? sizeof(struct mach_header_64) : sizeof(struct mach_header);
-    if (fseek(file, lc_offset, SEEK_SET) != 0) {
-        fprintf(stderr, "Failed to seek to load commands\n");
+    uint32_t cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags, reserved;
+    if (fread(&cputype, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&cpusubtype, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&filetype, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&ncmds, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&sizeofcmds, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&flags, sizeof(uint32_t), 1, file) != 1 ||
+        fread(&reserved, sizeof(uint32_t), 1, file) != 1) {
+        fprintf(stderr, "Ошибка чтения оставшихся полей заголовка Mach-O\n");
         return -1;
     }
+
+    if (is_big_endian) {
+        cputype    = OSSwapBigToHostInt32(cputype);
+        cpusubtype = OSSwapBigToHostInt32(cpusubtype);
+        filetype   = OSSwapBigToHostInt32(filetype);
+        ncmds      = OSSwapBigToHostInt32(ncmds);
+        sizeofcmds = OSSwapBigToHostInt32(sizeofcmds);
+        flags      = OSSwapBigToHostInt32(flags);
+        reserved   = OSSwapBigToHostInt32(reserved);
+    }
+
+    mach_o_file->cpu_type           = cputype;
+    mach_o_file->cpu_subtype        = cpusubtype;
+    mach_o_file->file_type          = filetype;
+    mach_o_file->flags              = flags;
+    mach_o_file->load_command_count = ncmds;
+
+    printf("[DEBUG] Magic: 0x%x, CPU Type: %u, Subtype: %u, Ncmds: %u, Flags: 0x%x\n",
+           magic, cputype, cpusubtype, ncmds, flags);
 
     return 0;
 }

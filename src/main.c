@@ -1,14 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <mach-o/fat.h>
 #include <mach/machine.h>
 #include <libkern/OSByteOrder.h>
+#include <unistd.h>
 
 #include <security_analyzer.h>
 #include "../macho-analyzer/include/macho_printer.h"
 #include "../macho-analyzer/include/language_detector.h"
 #include "../macho-analyzer/include/lc_commands.h"
+#include "../macho-analyzer/include/macho_analyzer.h"
+
+#define MAX_ARCHS 8
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -65,145 +71,113 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Отладка: вывод первых 16 байт файла
+    unsigned char buf[16];
+    fread(buf, 1, 16, file);
+    printf("[main.c] Первые 16 байт файла: ");
+    for (int i = 0; i < 16; i++) printf("%02x ", buf[i]);
+    printf("\n");
+    rewind(file);
+
     uint32_t magic = 0;
     if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
-        fprintf(stderr, "Не удалось прочитать magic число.\n");
+        fprintf(stderr, "Не удалось прочитать magic\n");
         fclose(file);
         return 1;
     }
-    rewind(file);
+    fseek(file, 0, SEEK_SET);
+
+    MachOFile main_arch_file;
+    memset(&main_arch_file, 0, sizeof(MachOFile));
+    bool main_arch_set = false;
 
     if (magic == FAT_MAGIC || magic == FAT_CIGAM) {
         struct fat_header fatHeader;
-        if (fread(&fatHeader, sizeof(struct fat_header), 1, file) != 1) {
-            fprintf(stderr, "Ошибка при чтении заголовка fat-файла.\n");
-            fclose(file);
-            return 1;
-        }
-
+        fread(&fatHeader, sizeof(struct fat_header), 1, file);
         uint32_t nfat_arch = OSSwapBigToHostInt32(fatHeader.nfat_arch);
         printf("Fat-бинарник с %u архитектурами:\n\n", nfat_arch);
 
-        struct fat_arch *fatArchs = calloc(nfat_arch, sizeof(struct fat_arch));
-        if (!fatArchs) {
-            fprintf(stderr, "Ошибка выделения памяти.\n");
-            fclose(file);
-            return 1;
+        struct fat_arch fatArchs[MAX_ARCHS];
+        for (uint32_t i = 0; i < nfat_arch && i < MAX_ARCHS; i++) {
+            fread(&fatArchs[i], sizeof(struct fat_arch), 1, file);
         }
 
-        for (uint32_t i = 0; i < nfat_arch; i++) {
-            if (fread(&fatArchs[i], sizeof(struct fat_arch), 1, file) != 1) {
-                fprintf(stderr, "Ошибка чтения fat_arch %u.\n", i);
-                free(fatArchs);
-                fclose(file);
-                return 1;
-            }
-        }
-
-        for (uint32_t i = 0; i < nfat_arch; i++) {
+        for (uint32_t i = 0; i < nfat_arch && i < MAX_ARCHS; i++) {
             uint32_t offset = OSSwapBigToHostInt32(fatArchs[i].offset);
-            uint32_t size = OSSwapBigToHostInt32(fatArchs[i].size);
             cpu_type_t cpuType = OSSwapBigToHostInt32(fatArchs[i].cputype);
             cpu_subtype_t cpuSubtype = OSSwapBigToHostInt32(fatArchs[i].cpusubtype);
 
             printf("---- Анализ архитектуры %u (%s) ----\n", i + 1, get_arch_name(cpuType, cpuSubtype));
-            printf("Смещение = %u, Размер = %u\n", offset, size);
+            printf("Смещение = %u\n", offset);
 
-            if (fseek(file, offset, SEEK_SET) != 0) {
-                fprintf(stderr, "Не удалось перейти к архитектуре %u.\n", i + 1);
-                continue;
-            }
+            fseek(file, offset, SEEK_SET);
 
-            MachOFile arch_file;
-            memset(&arch_file, 0, sizeof(MachOFile));
+            MachOFile arch;
+            memset(&arch, 0, sizeof(MachOFile));
 
-            if (analyze_mach_o(file, &arch_file) != 0) {
+            if (analyze_mach_o(file, &arch) != 0 || analyze_load_commands(file, &arch) != 0) {
                 fprintf(stderr, "Не удалось проанализировать архитектуру %u.\n", i + 1);
                 continue;
             }
 
-            if (analyze_load_commands(file, &arch_file) != 0) {
-                fprintf(stderr, "Не удалось прочитать команды загрузки архитектуры %u.\n", i + 1);
-                free_mach_o_file(&arch_file);
-                continue;
+            if (!main_arch_set) {
+                memcpy(&main_arch_file, &arch, sizeof(MachOFile));
+                main_arch_set = true;
             }
 
             if (list_dylibs) {
-                print_dynamic_libraries(&arch_file);
+                print_dynamic_libraries(&arch);
             } else {
-                print_mach_o_info(&arch_file, file);
+                print_mach_o_info(&arch, file);
             }
 
-            analyze_section_permissions(&arch_file, file);
-            analyze_debug_symbols(&arch_file, file);
+            analyze_section_permissions(&arch, file);
+            analyze_debug_symbols(&arch, file);
 
-            HashTable *unsafe_function_table = initialize_unsafe_function_table();
-            if (unsafe_function_table) {
-                analyze_unsafe_functions(&arch_file, file, unsafe_function_table);
-                hash_table_destroy(unsafe_function_table, NULL);
+            HashTable *table = initialize_unsafe_function_table();
+            if (table) {
+                analyze_unsafe_functions(&arch, file, table);
+                hash_table_destroy(table, NULL);
             }
 
-            LanguageInfo lang_info;
-            if (detect_language_and_compiler(&arch_file, file, &lang_info) == 0) {
-                printf("Информация о языке и компиляторе:\n");
-                printf("  Язык: %s\n", lang_info.language);
-                printf("  Компилятор: %s\n", lang_info.compiler);
-                printf("\n");
-            } else {
-                printf("Не удалось определить язык или компилятор.\n");
-            }
-
-            free_mach_o_file(&arch_file);
+            free_mach_o_file(&arch);
         }
-
-        free(fatArchs);
     } else {
-        MachOFile mach_o_file;
-        memset(&mach_o_file, 0, sizeof(MachOFile));
-
-        if (analyze_mach_o(file, &mach_o_file) != 0) {
-            fprintf(stderr, "Не удалось проанализировать файл Mach-O.\n");
-            fclose(file);
-            return 1;
-        }
-
-        if (analyze_load_commands(file, &mach_o_file) != 0) {
-            fprintf(stderr, "Не удалось прочитать команды загрузки.\n");
-            free_mach_o_file(&mach_o_file);
+        // Файл не FAT — обычный Mach-O
+        fseek(file, 0, SEEK_SET);
+        if (analyze_mach_o(file, &main_arch_file) != 0 || analyze_load_commands(file, &main_arch_file) != 0) {
+            fprintf(stderr, "Не удалось проанализировать Mach-O файл.\n");
             fclose(file);
             return 1;
         }
 
         if (list_dylibs) {
-            print_dynamic_libraries(&mach_o_file);
+            print_dynamic_libraries(&main_arch_file);
         } else {
-            print_mach_o_info(&mach_o_file, file);
+            print_mach_o_info(&main_arch_file, file);
         }
 
-        analyze_section_permissions(&mach_o_file, file);
-        analyze_debug_symbols(&mach_o_file, file);
+        analyze_section_permissions(&main_arch_file, file);
+        analyze_debug_symbols(&main_arch_file, file);
 
-        HashTable *unsafe_function_table = initialize_unsafe_function_table();
-        if (!unsafe_function_table) {
-            fprintf(stderr, "Ошибка инициализации таблицы небезопасных функций\n");
-            fclose(file);
-            return 1;
+        HashTable *table = initialize_unsafe_function_table();
+        if (table) {
+            analyze_unsafe_functions(&main_arch_file, file, table);
+            hash_table_destroy(table, NULL);
         }
+        main_arch_set = true;
+    }
 
-        analyze_unsafe_functions(&mach_o_file, file, unsafe_function_table);
-        hash_table_destroy(unsafe_function_table, NULL);
-
+    if (main_arch_set) {
         LanguageInfo lang_info;
-        if (detect_language_and_compiler(&mach_o_file, file, &lang_info) == 0) {
-            printf("Информация о языке и компиляторе:\n");
+        if (detect_language_and_compiler(&main_arch_file, file, &lang_info) == 0) {
+            printf("\nИнформация о языке и компиляторе:\n");
             printf("  Язык: %s\n", lang_info.language);
             printf("  Компилятор: %s\n", lang_info.compiler);
-            printf("\n");
         } else {
-            printf("Не удалось определить язык или компилятор.\n");
+            printf("\nНе удалось определить язык или компилятор.\n");
         }
-
-        free_mach_o_file(&mach_o_file);
+        free_mach_o_file(&main_arch_file);
     }
 
     fclose(file);
