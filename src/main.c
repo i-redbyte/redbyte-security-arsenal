@@ -23,7 +23,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Проверяем размер файла
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
     if (file_size < sizeof(uint32_t)) {
@@ -56,6 +55,7 @@ int main(int argc, char *argv[]) {
             fclose(file);
             return 1;
         }
+
         uint32_t narch = OSSwapBigToHostInt32(fh.nfat_arch);
         printf("FAT бинарник с %u архитектурами:\n\n", narch);
 
@@ -83,64 +83,43 @@ int main(int argc, char *argv[]) {
             printf("---- Архитектура %u (смещение: %u) ----\n", i + 1, offset);
 
             if (analyze_mach_o(file, &mf) == 0) {
-                // Отладка: выводим содержимое MachOFile после analyze_mach_o
                 printf("После analyze_mach_o: magic=0x%x, cputype=0x%x, ncmds=%u\n",
                        mf.magic, mf.cpu_type, mf.load_command_count);
 
-                if (analyze_load_commands(file, &mf) == 0) {
-                    // Отладка: выводим перед print_mach_o_info
-                    printf("Перед print_mach_o_info: magic=0x%x, cputype=0x%x, ncmds=%u\n",
-                           mf.magic, mf.cpu_type, mf.load_command_count);
-                    print_mach_o_info(&mf, file);
+                print_mach_o_info(&mf, file);
 
-                    if (!first_arch_initialized) {
-                        first_arch = mf;
-                        // Предотвращаем двойное освобождение памяти
-                        mf.commands = NULL;
-                        mf.segments = NULL;
-                        mf.dylibs = NULL;
-                        first_arch_initialized = true;
-                    }
-                } else {
-                    fprintf(stderr, "Ошибка: Не удалось проанализировать команды загрузки для архитектуры %u\n", i + 1);
+                if (!first_arch_initialized) {
+                    first_arch = mf;
+                    mf.commands = NULL;
+                    mf.segments = NULL;
+                    mf.dylibs = NULL;
+                    first_arch_initialized = true;
                 }
             } else {
                 fprintf(stderr, "Ошибка: Не удалось проанализировать архитектуру %u\n", i + 1);
             }
 
-            // Освобождаем память, если не сохранили в first_arch
             if (!first_arch_initialized || &mf != &first_arch) {
                 free_mach_o_file(&mf);
             }
+
             printf("\n");
         }
     } else {
         MachOFile mf = {0};
         if (analyze_mach_o(file, &mf) == 0) {
-            // Отладка: выводим содержимое MachOFile после analyze_mach_o
             printf("После analyze_mach_o: magic=0x%x, cputype=0x%x, ncmds=%u\n",
                    mf.magic, mf.cpu_type, mf.load_command_count);
 
-            if (analyze_load_commands(file, &mf) == 0) {
-                // Отладка: выводим перед print_mach_o_info
-                printf("Перед print_mach_o_info: magic=0x%x, cputype=0x%x, ncmds=%u\n",
-                       mf.magic, mf.cpu_type, mf.load_command_count);
-                print_mach_o_info(&mf, file);
-                first_arch = mf;
-                // Предотвращаем двойное освобождение памяти
-                mf.commands = NULL;
-                mf.segments = NULL;
-                mf.dylibs = NULL;
-                first_arch_initialized = true;
-            } else {
-                fprintf(stderr, "Ошибка: Не удалось проанализировать команды загрузки\n");
-            }
+            print_mach_o_info(&mf, file);
+
+            first_arch = mf;
+            mf.commands = NULL;
+            mf.segments = NULL;
+            mf.dylibs = NULL;
+            first_arch_initialized = true;
         } else {
             fprintf(stderr, "Ошибка: Не удалось проанализировать файл Mach-O\n");
-        }
-
-        // Освобождаем память, если не сохранили в first_arch
-        if (!first_arch_initialized) {
             free_mach_o_file(&mf);
         }
     }
