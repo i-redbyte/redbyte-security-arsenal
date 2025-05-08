@@ -201,7 +201,6 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
         return -1;
     }
 
-    // Проверяем размер файла
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
     if (file_size < sizeof(uint32_t)) {
@@ -210,115 +209,31 @@ int analyze_mach_o(FILE *file, MachOFile *mach_o_file) {
     }
     rewind(file);
 
-    // Инициализируем структуру MachOFile
     memset(mach_o_file, 0, sizeof(MachOFile));
 
-    // Читаем magic number
     uint32_t magic;
     if (fread(&magic, sizeof(uint32_t), 1, file) != 1) {
         fprintf(stderr, "Ошибка чтения magic number\n");
         return -1;
     }
-    fseek(file, 0, SEEK_SET); // Возвращаемся к началу
+    fseek(file, 0, SEEK_SET);
 
-    bool is_64_bit = false;
-    bool is_big_endian = false;
-
-    // Определяем формат файла
     switch (magic) {
-        case MH_MAGIC_64:
-            is_64_bit = true;
-            is_big_endian = false;
-            break;
-        case MH_CIGAM_64:
-            is_64_bit = true;
-            is_big_endian = true;
-            break;
         case MH_MAGIC:
-            is_64_bit = false;
-            is_big_endian = false;
-            break;
         case MH_CIGAM:
-            is_64_bit = false;
-            is_big_endian = true;
-            break;
+        case MH_MAGIC_64:
+        case MH_CIGAM_64:
+            if (analyze_mach_header(file, mach_o_file) != 0) return -1;
+            if (analyze_load_commands(file, mach_o_file) != 0) return -1;
+            analyze_code_signature(mach_o_file, file);
+            return 0;
+        case FAT_MAGIC:
+        case FAT_CIGAM:
+            return analyze_fat_binary(file);
         default:
             fprintf(stderr, "Неподдерживаемый magic: 0x%x\n", magic);
             return -1;
     }
-
-    // Сохраняем magic и флаги
-    mach_o_file->magic = magic;
-    mach_o_file->is_64_bit = is_64_bit;
-
-    // Отладочная информация
-    printf("Magic: 0x%x, is_64_bit: %d, is_big_endian: %d\n", magic, is_64_bit, is_big_endian);
-
-    if (is_64_bit) {
-        struct mach_header_64 header;
-        if (fread(&header, sizeof(header), 1, file) != 1) {
-            fprintf(stderr, "Ошибка чтения заголовка Mach-O 64-bit\n");
-            return -1;
-        }
-
-        // Проверяем валидность заголовка
-        if (header.cputype == 0) {
-            fprintf(stderr, "Ошибка: Недопустимый CPU Type в заголовке\n");
-            return -1;
-        }
-        if (header.ncmds == 0) {
-            fprintf(stderr, "Ошибка: Нет команд загрузки в заголовке\n");
-            return -1;
-        }
-
-        // Заполняем структуру с учётом порядка байтов
-        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
-        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
-        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
-        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
-        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
-        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
-        mach_o_file->header_size = sizeof(struct mach_header_64);
-
-        // Отладочная информация после заполнения структуры
-        printf("64-bit header: cputype=0x%x, ncmds=%u, sizeofcmds=%u\n",
-               mach_o_file->cpu_type, mach_o_file->load_command_count, mach_o_file->sizeofcmds);
-        printf("MachOFile after filling: magic=0x%x, cputype=0x%x, ncmds=%u\n",
-               mach_o_file->magic, mach_o_file->cpu_type, mach_o_file->load_command_count);
-    } else {
-        struct mach_header header;
-        if (fread(&header, sizeof(header), 1, file) != 1) {
-            fprintf(stderr, "Ошибка чтения заголовка Mach-O 32-bit\n");
-            return -1;
-        }
-
-        // Проверяем валидность заголовка
-        if (header.cputype == 0) {
-            fprintf(stderr, "Ошибка: Недопустимый CPU Type в заголовке\n");
-            return -1;
-        }
-        if (header.ncmds == 0) {
-            fprintf(stderr, "Ошибка: Нет команд загрузки в заголовке\n");
-            return -1;
-        }
-
-        // Заполняем структуру
-        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
-        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
-        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
-        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
-        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
-        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
-        mach_o_file->header_size = sizeof(struct mach_header);
-
-        // Отладочная информация
-        printf("32-bit header: cputype=0x%x, ncmds=%u, sizeofcmds=%u\n",
-               mach_o_file->cpu_type, mach_o_file->load_command_count, mach_o_file->sizeofcmds);
-        printf("MachOFile after filling: magic=0x%x, cputype=0x%x, ncmds=%u\n",
-               mach_o_file->magic, mach_o_file->cpu_type, mach_o_file->load_command_count);
-    }
-
-    return 0;
 }
 
 const char *get_arch_name(cpu_type_t cpu, cpu_subtype_t sub) {
@@ -412,26 +327,66 @@ static int analyze_mach_header(FILE *file, MachOFile *mach_o_file) {
     if (read_and_validate(file, &magic, sizeof(uint32_t), "Failed to read magic number") != 0) {
         return -1;
     }
-    fseek(file, -(long) sizeof(uint32_t), SEEK_CUR); // Возвращаемся назад
 
-    if (magic == MH_MAGIC_64 || magic == MH_CIGAM_64) {
-        mach_o_file->is_64_bit = 1;
+    bool is_big_endian = false;
+    bool is_64_bit = false;
+
+    switch (magic) {
+        case MH_MAGIC:
+            is_64_bit = false;
+            is_big_endian = false;
+            break;
+        case MH_CIGAM:
+            is_64_bit = false;
+            is_big_endian = true;
+            break;
+        case MH_MAGIC_64:
+            is_64_bit = true;
+            is_big_endian = false;
+            break;
+        case MH_CIGAM_64:
+            is_64_bit = true;
+            is_big_endian = true;
+            break;
+        default:
+            fprintf(stderr, "Unsupported file format or invalid magic number: 0x%x\n", magic);
+            return -1;
+    }
+
+    fseek(file, -(long) sizeof(uint32_t), SEEK_CUR); // Вернуть указатель назад для чтения заголовка полностью
+
+    if (is_64_bit) {
         struct mach_header_64 header;
         if (read_and_validate(file, &header, sizeof(struct mach_header_64), "Failed to read 64-bit Mach-O header") != 0) {
             return -1;
         }
+        mach_o_file->magic = header.magic;
+        mach_o_file->is_64_bit = true;
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
+        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
+        mach_o_file->header_size = sizeof(struct mach_header_64);
         mach_o_file->header.header64 = header;
-    } else if (magic == MH_MAGIC || magic == MH_CIGAM) {
-        mach_o_file->is_64_bit = 0;
+    } else {
         struct mach_header header;
         if (read_and_validate(file, &header, sizeof(struct mach_header), "Failed to read 32-bit Mach-O header") != 0) {
             return -1;
         }
+        mach_o_file->magic = header.magic;
+        mach_o_file->is_64_bit = false;
+        mach_o_file->cpu_type = is_big_endian ? OSSwapBigToHostInt32(header.cputype) : header.cputype;
+        mach_o_file->cpu_subtype = is_big_endian ? OSSwapBigToHostInt32(header.cpusubtype) : header.cpusubtype;
+        mach_o_file->file_type = is_big_endian ? OSSwapBigToHostInt32(header.filetype) : header.filetype;
+        mach_o_file->flags = is_big_endian ? OSSwapBigToHostInt32(header.flags) : header.flags;
+        mach_o_file->load_command_count = is_big_endian ? OSSwapBigToHostInt32(header.ncmds) : header.ncmds;
+        mach_o_file->sizeofcmds = is_big_endian ? OSSwapBigToHostInt32(header.sizeofcmds) : header.sizeofcmds;
+        mach_o_file->header_size = sizeof(struct mach_header);
         mach_o_file->header.header32 = header;
-    } else {
-        fprintf(stderr, "Unsupported file format or invalid magic number: 0x%x\n", magic);
-        return -1;
     }
+
     return 0;
 }
 
